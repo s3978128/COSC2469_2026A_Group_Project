@@ -39,17 +39,18 @@ def _run_shortest_time_query(graph):
     hour = input("Departure hour (0-23): ").strip()
 
     try:
-        start_time = int(hour)
-        if not 0 <= start_time <= 23:
+        start_hour = int(hour)
+        if not 0 <= start_hour <= 23:
             print("Hour must be between 0 and 23.")
             return
 
+        start_time = start_hour * 60  # convert hour to minutes
         path, total_time = dijkstra(graph, start, goal, cost_by_time, start_time)
         if not path:
             print("No path found.")
             return
 
-        print(f"Shortest travel time from {start} to {goal} (departing at hour {start_time}): {total_time}")
+        print(f"Shortest travel time from {start} to {goal} (departing at hour {start_hour}): {total_time} minutes")
         print(f"Path: {' -> '.join(path)}")
     except ValueError as error:
         print(f"Error: {error}")
