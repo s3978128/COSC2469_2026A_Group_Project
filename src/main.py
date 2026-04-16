@@ -1,4 +1,5 @@
 from algorithms.dijkstra import shortest_distance_path
+from algorithms.time_dijkstra import shortest_time_path
 from generator.graph_generator import generate_small_test_graph
 
 
@@ -29,6 +30,24 @@ def _run_shortest_path_query(graph):
     except ValueError as error:
         print(f"Error: {error}")
 
+def _run_fastest_time_query(graph):
+    print(f"Available nodes: {', '.join(graph.nodes())}")
+    start = input("Start node: ").strip()
+    goal = input("Goal node: ").strip()
+    hour = int(input("Start hour (0-23): ").strip())
+
+    try:
+        total_time, path = shortest_time_path(graph, start, goal, hour)
+
+        if not path:
+            print("No path found.")
+            return
+
+        print(f"Fastest time from {start} to {goal}: {total_time}")
+        print(f"Path: {' -> '.join(path)}")
+
+    except ValueError as error:
+        print(f"Error: {error}")
 
 def main():
     graph = generate_small_test_graph()
@@ -37,14 +56,17 @@ def main():
         print("\n=== Smart Path Finder CLI ===")
         print("1. Show graph")
         print("2. Find shortest distance path")
-        print("3. Exit")
-        choice = input("Choose an option (1-3): ").strip()
+        print("3. Find fastest time path")
+        print("4. Exit")
+        choice = input("Choose an option (1-4): ").strip()
 
         if choice == "1":
             _print_graph(graph)
         elif choice == "2":
             _run_shortest_path_query(graph)
         elif choice == "3":
+            _run_fastest_time_query(graph)
+        elif choice == "4":
             print("Goodbye.")
             break
         else:
