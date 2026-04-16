@@ -8,7 +8,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from algorithms.dijkstra import shortest_distance_path
+from algorithms.dijkstra import dijkstra, cost_by_distance, cost_by_time
 from generator.graph_generator import generate_small_test_graph
 from graph.graph import Graph
 
@@ -18,12 +18,12 @@ class TestDijkstra(unittest.TestCase):
         self.graph = generate_small_test_graph()
 
     def test_shortest_path_a_to_f(self):
-        distance, path = shortest_distance_path(self.graph, "A", "F")
+        path, distance = dijkstra(self.graph, "A", "F", cost_by_distance)
         self.assertAlmostEqual(distance, 12.5)
         self.assertEqual(path, ["A", "C", "D", "F"])
 
     def test_same_start_and_goal(self):
-        distance, path = shortest_distance_path(self.graph, "C", "C")
+        path, distance = dijkstra(self.graph, "C", "C", cost_by_distance)
         self.assertEqual(distance, 0.0)
         self.assertEqual(path, ["C"])
 
@@ -32,14 +32,13 @@ class TestDijkstra(unittest.TestCase):
         graph.add_node("A")
         graph.add_node("B")
 
-        distance, path = shortest_distance_path(graph, "A", "B")
+        path, distance = dijkstra(graph, "A", "B", cost_by_distance)
         self.assertEqual(distance, inf)
         self.assertEqual(path, [])
 
     def test_invalid_node_raises_error(self):
         with self.assertRaises(ValueError):
-            shortest_distance_path(self.graph, "A", "Z")
-
+            dijkstra(self.graph, "A", "Z", cost_by_distance)
 
 if __name__ == "__main__":
     unittest.main()
