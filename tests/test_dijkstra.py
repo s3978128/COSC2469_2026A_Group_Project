@@ -8,7 +8,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from algorithms.dijkstra import dijkstra, cost_by_distance, cost_by_time
+from algorithms.dijkstra import dijkstra
+from cost.distance_cost import cost_by_distance
+from cost.time_cost import cost_by_time
 from generator.graph_generator import generate_small_test_graph
 from graph.graph import Graph
 
@@ -28,7 +30,7 @@ class TestDijkstra(unittest.TestCase):
         self.assertEqual(path, ["C"])
 
     def test_unreachable_returns_inf_and_empty_path(self):
-        graph = Graph(directed=True)
+        graph = Graph()
         graph.add_node("A")
         graph.add_node("B")
 

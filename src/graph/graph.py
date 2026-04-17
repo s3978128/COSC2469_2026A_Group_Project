@@ -7,8 +7,7 @@ from graph.node import Node
 
 
 class Graph:
-    def __init__(self, directed=False):
-        self.directed = directed
+    def __init__(self):
         self._nodes = {}  # node_id -> Node
         self.adj = {}     # node_id -> list[Edge]
 
@@ -27,7 +26,7 @@ class Graph:
     # ── Edge operations ──────────────────────────────────────────────
 
     def add_edge(self, from_id, to_id, distance, time_weights):
-        """Add an edge between two nodes. Creates nodes if they don't exist.
+        """Add a directed edge from from_id to to_id.
 
         time_weights must be a list of exactly 24 values.
         """
@@ -39,8 +38,14 @@ class Graph:
 
         self.adj[from_id].append(Edge(from_id, to_id, distance, time_weights))
 
-        if not self.directed:
-            self.adj[to_id].append(Edge(to_id, from_id, distance, time_weights))
+    def add_two_way_edge(self, node_a, node_b, distance, time_weights):
+        """Add edges in both directions (two-way road)."""
+        self.add_edge(node_a, node_b, distance, time_weights)
+        self.add_edge(node_b, node_a, distance, time_weights)
+
+    def add_one_way_edge(self, from_id, to_id, distance, time_weights):
+        """Add an edge in one direction only (one-way road)."""
+        self.add_edge(from_id, to_id, distance, time_weights)
 
     # ── Query operations ─────────────────────────────────────────────
 
@@ -73,4 +78,4 @@ class Graph:
                          + (node_a.y - node_b.y) ** 2)
 
     def __repr__(self):
-        return f"Graph(nodes={len(self._nodes)}, directed={self.directed})"
+        return f"Graph(nodes={len(self._nodes)})"
