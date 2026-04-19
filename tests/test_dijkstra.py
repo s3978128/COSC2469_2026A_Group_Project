@@ -42,5 +42,23 @@ class TestDijkstra(unittest.TestCase):
         with self.assertRaises(ValueError):
             dijkstra(self.graph, "A", "Z", cost_by_distance)
 
+    def test_shortest_time_path_a_to_f_at_midnight(self):
+        path, total_time = dijkstra(
+            self.graph,
+            "A",
+            "F",
+            cost_by_time,
+            start_time=0,
+        )
+        self.assertEqual(path, ["A", "C", "D", "F"])
+        self.assertAlmostEqual(total_time, 18.0)
+
+    def test_negative_cost_raises_error(self):
+        def negative_cost(edge, current_time):
+            return -1
+
+        with self.assertRaises(ValueError):
+            dijkstra(self.graph, "A", "F", negative_cost)
+
 if __name__ == "__main__":
     unittest.main()
