@@ -1,13 +1,19 @@
-"""Bidirectional Dijkstra for static non-negative edge costs.
+"""Distance-focused bidirectional A*.
 
-This implementation is intended for distance-style objectives where edge costs
-are time-independent during the search.
+This variant uses symmetric geometric lower bounds for forward/backward search:
+- forward heuristic: node -> goal
+- backward heuristic: node -> start
+
+To preserve correctness without requiring delicate early-stop proofs, the search
+runs until both priority queues are exhausted (or a side proves disconnected),
+while maintaining exact distance labels on both sides.
 """
 
+from algorithms.a_star import _default_heuristic
 from utils.min_heap import MinHeap
 
 
-def bidirectional_dijkstra(
+def bidirectional_a_star(
     graph,
     start,
     goal,
@@ -17,22 +23,22 @@ def bidirectional_dijkstra(
     return_stats=False,
     avoid_nodes=None,
     avoid_edges=None,
+    heuristic_fn=None,
+    heuristic_weight=1.0,
 ):
-    """Run bidirectional Dijkstra from start and goal.
-
-    Parameters mirror ``algorithms.dijkstra.dijkstra`` for compatibility.
-    """
+    """Run bidirectional A* for static non-negative distance-like objectives."""
     if start not in graph.adj or goal not in graph.adj:
         raise ValueError("start and goal must exist in the graph")
+    if start_time != 0:
+        raise ValueError("bidirectional_a_star only supports start_time=0")
+    if heuristic_weight < 1.0:
+        raise ValueError("heuristic_weight must be >= 1.0")
 
     blocked_nodes = set(avoid_nodes or [])
     blocked_edges = set(avoid_edges or [])
 
     if start in blocked_nodes or goal in blocked_nodes:
         raise ValueError("start/goal cannot be in avoid_nodes")
-
-    if start_time != 0:
-        raise ValueError("bidirectional_dijkstra only supports start_time=0")
 
     if start == goal:
         stats = {
@@ -48,16 +54,26 @@ def bidirectional_dijkstra(
             return [start], 0.0, stats
         return [start], 0.0
 
+    heuristic = heuristic_fn or _default_heuristic
+
     dist_f = {start: 0.0}
     dist_b = {goal: 0.0}
-
     prev_f = {start: None}
     next_b = {goal: None}
 
+    # (f_score, g_score, node_id)
     pq_f = MinHeap()
     pq_b = MinHeap()
-    pq_f.push((0.0, start))
-    pq_b.push((0.0, goal))
+    pq_f.push((
+        heuristic_weight * heuristic(graph, start, goal),
+        0.0,
+        start,
+    ))
+    pq_b.push((
+        heuristic_weight * heuristic(graph, goal, start),
+        0.0,
+        goal,
+    ))
 
     settled_f = set()
     settled_b = set()
@@ -75,20 +91,25 @@ def bidirectional_dijkstra(
             seen_visited.add(node_id)
             visited_order.append(node_id)
 
-    while not pq_f.is_empty() and not pq_b.is_empty():
-        if pq_f.peek()[0] + pq_b.peek()[0] >= best_cost:
-            break
+    while not pq_f.is_empty() or not pq_b.is_empty():
+        choose_forward = False
+        if not pq_f.is_empty() and not pq_b.is_empty():
+            choose_forward = pq_f.peek()[0] <= pq_b.peek()[0]
+        elif not pq_f.is_empty():
+            choose_forward = True
 
-        # Expand one node from the side with smaller frontier key.
-        expand_forward = pq_f.peek()[0] <= pq_b.peek()[0]
-
-        if expand_forward:
-            current_cost, node = pq_f.pop()
+        if choose_forward:
+            _, current_cost, node = pq_f.pop()
+            if current_cost > dist_f.get(node, float("inf")):
+                continue
             if node in settled_f:
                 continue
             settled_f.add(node)
             _record_visit(node)
             expanded_forward += 1
+
+            if current_cost >= best_cost:
+                continue
 
             if node in dist_b and current_cost + dist_b[node] < best_cost:
                 best_cost = current_cost + dist_b[node]
@@ -103,24 +124,33 @@ def bidirectional_dijkstra(
 
                 edge_cost = cost_func(edge, 0)
                 if edge_cost < 0:
-                    raise ValueError("Dijkstra requires non-negative edge costs")
+                    raise ValueError("Bidirectional A* requires non-negative edge costs")
 
                 new_cost = current_cost + edge_cost
+                if new_cost >= best_cost:
+                    continue
+
                 if new_cost < dist_f.get(neighbor, float("inf")):
                     dist_f[neighbor] = new_cost
                     prev_f[neighbor] = node
-                    pq_f.push((new_cost, neighbor))
+                    f_score = new_cost + (heuristic_weight * heuristic(graph, neighbor, goal))
+                    pq_f.push((f_score, new_cost, neighbor))
 
                     if neighbor in dist_b and new_cost + dist_b[neighbor] < best_cost:
                         best_cost = new_cost + dist_b[neighbor]
                         meeting_node = neighbor
         else:
-            current_cost, node = pq_b.pop()
+            _, current_cost, node = pq_b.pop()
+            if current_cost > dist_b.get(node, float("inf")):
+                continue
             if node in settled_b:
                 continue
             settled_b.add(node)
             _record_visit(node)
             expanded_backward += 1
+
+            if current_cost >= best_cost:
+                continue
 
             if node in dist_f and current_cost + dist_f[node] < best_cost:
                 best_cost = current_cost + dist_f[node]
@@ -134,13 +164,17 @@ def bidirectional_dijkstra(
 
                 edge_cost = cost_func(edge, 0)
                 if edge_cost < 0:
-                    raise ValueError("Dijkstra requires non-negative edge costs")
+                    raise ValueError("Bidirectional A* requires non-negative edge costs")
 
                 new_cost = current_cost + edge_cost
+                if new_cost >= best_cost:
+                    continue
+
                 if new_cost < dist_b.get(predecessor, float("inf")):
                     dist_b[predecessor] = new_cost
                     next_b[predecessor] = node
-                    pq_b.push((new_cost, predecessor))
+                    f_score = new_cost + (heuristic_weight * heuristic(graph, predecessor, start))
+                    pq_b.push((f_score, new_cost, predecessor))
 
                     if predecessor in dist_f and new_cost + dist_f[predecessor] < best_cost:
                         best_cost = new_cost + dist_f[predecessor]
@@ -161,7 +195,6 @@ def bidirectional_dijkstra(
             return [], float("inf"), stats
         return [], float("inf")
 
-    # Reconstruct start -> meeting
     left_path = []
     cursor = meeting_node
     while cursor is not None:
@@ -169,7 +202,6 @@ def bidirectional_dijkstra(
         cursor = prev_f.get(cursor)
     left_path.reverse()
 
-    # Reconstruct meeting -> goal using next_b mapping.
     right_path = []
     cursor = next_b.get(meeting_node)
     while cursor is not None:

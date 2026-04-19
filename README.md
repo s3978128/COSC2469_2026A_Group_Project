@@ -71,6 +71,7 @@ Recommended flow:
 4. Provide optional constraints when prompted:
   - avoid nodes: `N_1_2,N_3_4`
   - avoid edges: `N_1_2->N_1_3,N_3_4->N_3_5`
+  - for distance queries, choose algorithm or type `compare`
 5. Review output:
   - path sequence
   - total distance
@@ -125,6 +126,12 @@ Run:
 python src/evaluation/benchmark_datasets.py
 ```
 
+Optional (measure runtime and explainability in one pass, not split):
+
+```bash
+python src/evaluation/benchmark_datasets.py --no-split-runtime-stats
+```
+
 Outputs:
 
 - `results/runtime_results.csv`
@@ -134,7 +141,82 @@ Benchmark CSV now also includes explainability/search-effort metrics when
 available (for example expanded node counts) so runtime numbers can be
 interpreted with search behavior.
 
-Benchmark runner evaluates each registered algorithm for both objectives:
+Recent additions include:
+
+- `a_star` (distance objective)
+- `a_star_alt` (distance objective, ALT landmark heuristic)
+- `weighted_a_star` (distance objective, faster but may be suboptimal)
+- `bidirectional_a_star` (distance objective)
+- `stress_*` columns derived from expanded nodes over graph size
+- `optimality_gap_pct` against Dijkstra baseline for each pair/objective
+
+## Implemented Approaches (Current)
+
+| Algorithm | Objective(s) | Explainability Stats | Notes |
+|---|---|---|---|
+| `dijkstra` | distance, time | `expanded_nodes` | Baseline for cost optimality and gap calculations |
+| `bidirectional_dijkstra` | distance | `expanded_forward`, `expanded_backward`, `expanded_nodes` | Uses reverse-adjacency cache |
+| `a_star` | distance | `expanded_nodes` | Uses scaled Euclidean heuristic |
+| `a_star_alt` | distance | `expanded_nodes` | Uses ALT landmarks; warmup preprocessing excluded from timed query loops |
+| `weighted_a_star` (`w=1.25`) | distance | `expanded_nodes` | Speed/quality tradeoff variant |
+| `bidirectional_a_star` | distance | `expanded_forward`, `expanded_backward`, `expanded_nodes` | Conservative termination for correctness |
+
+## Cross-Dataset Performance Interpretation
+
+Using current `results/analysis.txt` (runs-per-pair = 2):
+
+### graph_100
+
+- Runtime leader: `dijkstra` (`0.3215 ms` mean)
+- Lowest stress: `a_star_alt` (`0.3280` mean)
+- Observation: ALT reduces explored nodes strongly, but small-graph runtime can
+  still favor low-overhead baselines
+
+### graph_1000
+
+- Runtime leader: `a_star_alt` (`2.0849 ms` mean)
+- Lowest stress: `a_star_alt` (`0.1524` mean)
+- Observation: ALT landmark heuristic outperformed baseline distance methods on
+  medium graph size while maintaining `0%` gap
+
+### graph_5000
+
+- Runtime leader: `a_star_alt` (`6.0912 ms` mean)
+- Lowest stress: `a_star_alt` (`0.1075` mean)
+- Observation: ALT gives a major large-graph breakthrough, reducing both
+  expansion workload and query runtime substantially
+
+### Quality (Optimality Gap)
+
+- Reported mean/max gap is effectively `0.0000%` for all currently evaluated
+  distance algorithms in this run
+- Practical interpretation: current heuristic configuration remains strongly
+  conservative, so weighted mode is not yet showing measurable quality loss
+
+## Interesting Discoveries / Breakthroughs
+
+1. Reverse-neighbor caching was a structural breakthrough
+- Moving reverse adjacency into graph-level cache removed repeated preprocessing
+  work and made bidirectional methods feasible at project scale.
+
+2. Search effort and runtime can diverge materially
+- Across datasets, algorithms with lower stress were not always faster.
+- This revealed that implementation overhead and Python-level constant factors
+  can dominate asymptotic intuition at current graph sizes.
+
+3. Weighted A* can remain effectively optimal with conservative heuristics
+- With current admissible scaling, weighted A* did not produce visible gap in
+  this benchmark pass.
+- This is useful for safety, but indicates additional heuristic engineering is
+  needed to expose stronger speed-vs-quality tradeoffs.
+
+4. ALT landmarks changed the distance-routing frontier
+- With warmup preprocessing separated from timed loops, `a_star_alt` became the
+  best performer on medium and large datasets while preserving `0%` gap.
+- This demonstrates that stronger heuristic quality can beat baseline Dijkstra
+  when measurement avoids mixing one-time setup with per-query runtime.
+
+Benchmark runner evaluates each registered algorithm for its supported objectives:
 
 - distance (`cost_by_distance`)
 - time (`cost_by_time`)
@@ -235,6 +317,34 @@ Practical notes:
 - for time-dependent costs, heuristic design is harder because edge travel time
   changes by hour
 
+Implementation detail used here: Euclidean heuristics are scaled by a safe
+graph-derived factor so the default distance A* heuristic remains admissible
+on generated datasets.
+
+### Weighted A*
+
+Weighted A* uses:
+
+$$
+f(n) = g(n) + w \cdot h(n), \quad w \ge 1
+$$
+
+With larger $w$, search is greedier and often faster, but optimality is not
+guaranteed. This project includes `weighted_a_star` for explicit speed/quality
+tradeoff experiments.
+
+### Bidirectional A*
+
+`bidirectional_a_star` is implemented for distance routing with symmetric
+heuristics:
+
+- forward side estimates from current node to goal
+- backward side estimates from current node to start
+
+To avoid incorrect aggressive early-stop behavior from incompatible potentials,
+the implementation uses conservative termination while still applying heuristic
+ordering on both frontiers.
+
 ### Optimality Gap
 
 Optimality gap measures how far an algorithm's route cost is from a reference
@@ -272,6 +382,126 @@ These two metrics complement runtime:
 - runtime tells speed
 - optimality gap tells solution quality
 - stress tells search workload
+
+## Final Distance-Evaluation Sweep (Sanity Check)
+
+This section summarizes whether the current implementation is sufficient to
+accurately evaluate the shortest-distance problem for this project scope.
+
+### What is implemented and validated
+
+- Baseline + comparators are implemented for distance objective:
+  `dijkstra`, `bidirectional_dijkstra`, `a_star`, `a_star_alt`,
+  `weighted_a_star`, `bidirectional_a_star`
+- Correctness and behavior tests pass (`43/43`), including:
+  - path/cost validity checks
+  - unreachable behavior
+  - avoid-node and avoid-edge constraints
+  - explainability stats shape/availability
+- Benchmark outputs include:
+  - runtime (`mean/max`)
+  - search effort (`expanded_nodes`, `stress`)
+  - quality (`optimality_gap_pct` vs Dijkstra)
+- Benchmark methodology separates query latency from stats overhead by default
+  (split runtime/stats mode), and excludes one-time ALT preprocessing from the
+  timed query loop via warmup.
+
+### Tradeoffs and realistic algorithm choices
+
+- Small graphs (`graph_100`):
+  `dijkstra` is still the fastest practical default due to lower constant
+  overhead, even when ALT explores fewer nodes.
+- Medium and large graphs (`graph_1000`, `graph_5000`):
+  `a_star_alt` is the most realistic distance-routing choice in this codebase,
+  with major runtime gains and much lower stress while keeping near-zero gap.
+- `weighted_a_star` currently behaves close to optimal in these datasets
+  (observed gap near `0%`), so it has not yet exposed a strong speed-quality
+  frontier under the present heuristic configuration.
+- `bidirectional_a_star` is currently not a practical runtime winner in this
+  implementation; keep it as an experimental/reference method.
+
+### What this means for evaluation confidence
+
+- For shortest-distance comparisons in this project, the setup is now strong
+  enough to make fair algorithm rankings and defend conclusions with runtime,
+  workload, and quality evidence.
+- The primary caveat is external validity: datasets are synthetic and currently
+  benchmarked on a fixed pair sample. Conclusions are accurate for this
+  benchmark design and implementation, but should be generalized to real-world
+  networks with care.
+
+## Limitations and Threats to Validity
+
+Use these points when framing conclusions in reports or presentations.
+
+- Synthetic-graph bias:
+  generated grids with realistic tuning are useful, but still simpler than
+  irregular real road networks (topology, turn restrictions, bottlenecks,
+  long-tail edge weights).
+- Sample-size bias in query pairs:
+  dataset-level rankings are based on a fixed sampled set of source-goal pairs;
+  different samples can shift mean runtime and tail behavior.
+- Runtime environment sensitivity:
+  Python constant factors, machine load, and interpreter version can affect
+  micro/millisecond-level comparisons, especially on smaller graphs.
+- Preprocessing accounting choices:
+  split mode intentionally emphasizes steady-state query latency; if a method
+  requires one-time setup, deployment scenarios should also report setup cost.
+- Scale boundary:
+  current datasets (up to 5,000 nodes) are strong for project evaluation but do
+  not fully represent very large production routing graphs.
+
+## Potential Improvements (Distance Problem)
+
+These improvements are prioritized for better evaluation quality and stronger
+distance-routing performance.
+
+### 1. Strengthen benchmark rigor
+
+- Increase `runs_per_pair` and sampled pair count per dataset.
+- Add repeated benchmark trials with different random seeds.
+- Report variance and percentile tails (for example p90/p95/p99), not only
+  mean/max.
+
+Why this matters:
+reduces sensitivity to outliers and improves confidence in speed rankings.
+
+### 2. Separate query and preprocessing costs explicitly
+
+- Add explicit benchmark outputs for:
+  - one-time preprocessing time per algorithm/dataset (for example ALT setup)
+  - post-warmup query runtime
+
+Why this matters:
+supports realistic deployment decisions where rebuild frequency varies.
+
+### 3. Tune ALT and weighted parameters systematically
+
+- Run sweeps for `landmark_count` (for example 2/4/8/16).
+- Run sweeps for `heuristic_weight` (for example 1.0/1.1/1.25/1.5).
+- Publish Pareto-style summary: runtime vs optimality gap vs stress.
+
+Why this matters:
+makes speed-quality tradeoffs explicit instead of relying on a single setting.
+
+### 4. Improve bidirectional A* practicality
+
+- Investigate compatible-potential termination and reduced bookkeeping.
+- Compare against unidirectional ALT under identical test workloads.
+- Keep correctness tests strict while optimizing constant overhead.
+
+Why this matters:
+current implementation is correctness-oriented but not yet runtime-competitive.
+
+### 5. Expand distance realism in datasets
+
+- Add more heterogeneous structures: sparse corridors, dense downtown cores,
+  bridge-like chokepoints, disconnected neighborhood patterns.
+- Validate edge-weight distributions against intended scenario assumptions.
+
+Why this matters:
+improves external validity of algorithm rankings for realistic shortest-distance
+analysis.
 
 ## Add a New Algorithm
 

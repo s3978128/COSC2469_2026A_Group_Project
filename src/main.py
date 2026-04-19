@@ -1,4 +1,11 @@
+import time
+
+from algorithms.a_star import a_star
+from algorithms.a_star_alt import a_star_alt
+from algorithms.bidirectional_a_star import bidirectional_a_star
+from algorithms.bidirectional_dijkstra import bidirectional_dijkstra
 from algorithms.dijkstra import dijkstra
+from algorithms.weighted_a_star import weighted_a_star
 from cost.distance_cost import cost_by_distance
 from cost.time_cost import cost_by_time
 from generator.graph_generator import generate_small_test_graph
@@ -94,6 +101,9 @@ def _run_shortest_path_query(graph):
     time_hour_text = input(
         "Departure hour for travel-time estimate (0-23, default 8): "
     ).strip()
+    algo_choice = input(
+        "Distance algorithm [dijkstra/a_star/a_star_alt/weighted_a_star/bidirectional_dijkstra/bidirectional_a_star/compare] (default dijkstra): "
+    ).strip().lower() or "dijkstra"
 
     try:
         avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
@@ -106,15 +116,92 @@ def _run_shortest_path_query(graph):
         else:
             report_hour = 8
 
-        path, distance, visited = dijkstra(
-            graph,
-            start,
-            goal,
-            cost_by_distance,
-            return_visited=True,
-            avoid_nodes=avoid_nodes,
-            avoid_edges=avoid_edges,
-        )
+        algorithm_map = {
+            "dijkstra": (dijkstra, {}),
+            "a_star": (a_star, {}),
+            "a_star_alt": (a_star_alt, {"landmark_count": 4}),
+            "weighted_a_star": (weighted_a_star, {"heuristic_weight": 1.25}),
+            "bidirectional_dijkstra": (bidirectional_dijkstra, {}),
+            "bidirectional_a_star": (bidirectional_a_star, {}),
+        }
+
+        if algo_choice == "compare":
+            print("\nDistance algorithm comparison:")
+            print("-" * 74)
+            print(f"{'algorithm':24s} {'cost':>10s} {'exp':>8s} {'ms':>10s} {'path'}")
+            print("-" * 74)
+
+            comparison_rows = []
+            for algo_name, (algo_fn, algo_kwargs) in algorithm_map.items():
+                t0 = time.perf_counter()
+                result = algo_fn(
+                    graph,
+                    start,
+                    goal,
+                    cost_by_distance,
+                    return_visited=True,
+                    return_stats=True,
+                    avoid_nodes=avoid_nodes,
+                    avoid_edges=avoid_edges,
+                    **algo_kwargs,
+                )
+                elapsed_ms = (time.perf_counter() - t0) * 1000
+
+                path = result[0]
+                distance = result[1]
+                visited = result[2] if len(result) >= 3 else []
+                stats = result[3] if len(result) >= 4 and isinstance(result[3], dict) else {}
+                expanded = int(stats.get("expanded_nodes", len(visited)))
+
+                if path:
+                    path_preview = f"{path[0]}->{path[-1]} ({len(path)} nodes)"
+                else:
+                    path_preview = "unreachable"
+
+                print(
+                    f"{algo_name:24s} {distance:10.2f} {expanded:8d} {elapsed_ms:10.3f} {path_preview}"
+                )
+                comparison_rows.append((algo_name, path, distance, visited, expanded, elapsed_ms))
+
+            print("-" * 74)
+
+            baseline = next((row[2] for row in comparison_rows if row[0] == "dijkstra"), None)
+            if baseline not in (None, float("inf"), 0):
+                print("Optimality gaps vs Dijkstra (%):")
+                for algo_name, _, distance, _, _, _ in comparison_rows:
+                    if distance == float("inf"):
+                        gap = float("inf")
+                    else:
+                        gap = ((distance - baseline) / baseline) * 100.0
+                    if gap == float("inf"):
+                        print(f"- {algo_name}: inf")
+                    else:
+                        print(f"- {algo_name}: {gap:.4f}%")
+
+            successful = [row for row in comparison_rows if row[1]]
+            if not successful:
+                print("No path found by any distance algorithm.")
+                return
+
+            successful.sort(key=lambda row: row[2])
+            _, path, distance, visited, _, _ = successful[0]
+        else:
+            if algo_choice not in algorithm_map:
+                print(f"Unknown distance algorithm '{algo_choice}'.")
+                return
+
+            algo_fn, algo_kwargs = algorithm_map[algo_choice]
+            path, distance, visited = algo_fn(
+                graph,
+                start,
+                goal,
+                cost_by_distance,
+                return_visited=True,
+                avoid_nodes=avoid_nodes,
+                avoid_edges=avoid_edges,
+                **algo_kwargs,
+            )
+
         if not path:
             print("No path found.")
             return
@@ -276,6 +363,7 @@ def _print_cli_help():
     print("- Pick a network first (or load one from data/datasets/...).")
     print("- Use option 1 to inspect the current network and node IDs.")
     print("- Use option 2 or 3 to run shortest-path queries.")
+    print("- Distance query supports algorithm selection or compare mode.")
     print("- Queries support optional avoid nodes/edges (blank to skip).")
     print("- In route view: S=start, E=end, ●=path, ◍=visited.")
     print("- Use option 5 to generate datasets and 6 to benchmark them.")

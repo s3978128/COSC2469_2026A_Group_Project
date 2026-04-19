@@ -13,6 +13,8 @@ def benchmark_dijkstra(
     cost_func,
     start_time=0,
     runs_per_pair=5,
+    algorithm_kwargs=None,
+    collect_stats=True,
 ):
     """Benchmark Dijkstra runtime for multiple start/goal pairs.
 
@@ -23,6 +25,8 @@ def benchmark_dijkstra(
     """
     if runs_per_pair < 1:
         raise ValueError("runs_per_pair must be at least 1")
+
+    algorithm_kwargs = dict(algorithm_kwargs or {})
 
     def _extract_stats(result_tuple):
         """Extract optional stats dict from algorithm return tuple."""
@@ -49,14 +53,25 @@ def benchmark_dijkstra(
         for _ in range(runs_per_pair):
             t0 = time.perf_counter()
             try:
-                result = dijkstra_fn(
-                    graph,
-                    start,
-                    goal,
-                    cost_func,
-                    start_time=start_time,
-                    return_stats=True,
-                )
+                if collect_stats:
+                    result = dijkstra_fn(
+                        graph,
+                        start,
+                        goal,
+                        cost_func,
+                        start_time=start_time,
+                        return_stats=True,
+                        **algorithm_kwargs,
+                    )
+                else:
+                    result = dijkstra_fn(
+                        graph,
+                        start,
+                        goal,
+                        cost_func,
+                        start_time=start_time,
+                        **algorithm_kwargs,
+                    )
             except TypeError:
                 # Backward compatibility for algorithms without return_stats.
                 result = dijkstra_fn(
@@ -65,6 +80,7 @@ def benchmark_dijkstra(
                     goal,
                     cost_func,
                     start_time=start_time,
+                    **algorithm_kwargs,
                 )
 
             if not isinstance(result, tuple) or len(result) < 2:
@@ -77,9 +93,10 @@ def benchmark_dijkstra(
             run_times_ms.append(elapsed_ms)
             final_path = path
             final_cost = cost
-            stats = _extract_stats(result)
-            if stats:
-                run_stats.append(stats)
+            if collect_stats:
+                stats = _extract_stats(result)
+                if stats:
+                    run_stats.append(stats)
 
         row = {
             "start": start,

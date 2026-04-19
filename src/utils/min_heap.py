@@ -26,6 +26,12 @@ class MinHeap:
             self._sift_down(0)
         return item
 
+    def peek(self):
+        """Return the smallest item without removing it."""
+        if not self._data:
+            raise IndexError("peek from empty heap")
+        return self._data[0]
+
     def is_empty(self):
         """Return True if the heap contains no items."""
         return len(self._data) == 0
