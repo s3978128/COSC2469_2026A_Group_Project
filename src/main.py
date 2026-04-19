@@ -1,32 +1,152 @@
+<<<<<<< HEAD
 from algorithms.dijkstra import shortest_distance_path
 from algorithms.time_dijkstra import shortest_time_path
+=======
+from algorithms.dijkstra import dijkstra
+from cost.distance_cost import cost_by_distance
+from cost.time_cost import cost_by_time
+>>>>>>> ha-test
 from generator.graph_generator import generate_small_test_graph
+from utils.visualization import (
+    render_network_grid,
+    render_path_details,
+    render_graph_info,
+)
+
+
+def _parse_avoid_nodes(raw_text, valid_nodes):
+    """Parse comma-separated node ids for optional node-avoid constraints."""
+    if not raw_text.strip():
+        return set()
+
+    parsed = {token.strip() for token in raw_text.split(",") if token.strip()}
+    unknown = sorted(node for node in parsed if node not in valid_nodes)
+    if unknown:
+        raise ValueError(f"Unknown nodes in avoid list: {', '.join(unknown)}")
+    return parsed
+
+
+def _parse_avoid_edges(raw_text, valid_nodes):
+    """Parse comma-separated directed edges in SRC->DST format."""
+    if not raw_text.strip():
+        return set()
+
+    parsed = set()
+    for token in raw_text.split(","):
+        text = token.strip()
+        if not text:
+            continue
+        if "->" not in text:
+            raise ValueError(
+                f"Invalid edge format '{text}'. Expected SRC->DST (e.g., N_1_1->N_1_2)."
+            )
+        source, destination = [part.strip() for part in text.split("->", 1)]
+        if source not in valid_nodes or destination not in valid_nodes:
+            raise ValueError(f"Unknown edge endpoint in '{text}'")
+        parsed.add((source, destination))
+
+    return parsed
+
+
+def _prompt_optional_constraints(graph):
+    """Prompt optional avoid-node and avoid-edge constraints for a query."""
+    valid_nodes = set(graph.nodes())
+
+    avoid_nodes_raw = input(
+        "Optional avoid nodes (comma-separated, blank for none): "
+    ).strip()
+    avoid_edges_raw = input(
+        "Optional avoid edges (SRC->DST, comma-separated, blank for none): "
+    ).strip()
+
+    avoid_nodes = _parse_avoid_nodes(avoid_nodes_raw, valid_nodes)
+    avoid_edges = _parse_avoid_edges(avoid_edges_raw, valid_nodes)
+    return avoid_nodes, avoid_edges
 
 
 def _print_graph(graph):
-    print("\nSmall test graph (adjacency list):")
-    for node in graph.nodes():
+    """Display graph statistics, visual representation, and adjacency list."""
+    print(render_graph_info(graph))
+
+    print("Visual Road Network:")
+    print(render_network_grid(graph))
+
+    print("\nAdjacency List (Detailed):")
+    print("─" * 70)
+    for node in sorted(graph.nodes()):
         neighbor_info = []
         for edge in graph.neighbors(node):
+            # Infer road type from speed
+            speed = (edge.distance / edge.get_travel_time(12)) * 60
+            if speed >= 70:
+                road_type = "HWY"
+            elif speed >= 40:
+                road_type = "MAIN"
+            else:
+                road_type = "LOCAL"
+
             neighbor_info.append(
-                f"{edge.destination}(distance={edge.distance}, time@08={edge.travel_time_at(8)})"
+                f"{edge.destination}({road_type}, {edge.distance:.1f}km, {edge.get_travel_time(12):.1f}min)"
             )
-        print(f"{node}: {', '.join(neighbor_info)}")
+        # print(f"{node:5s}: {', '.join(neighbor_info)}")
+    print("─" * 70)
 
 
 def _run_shortest_path_query(graph):
-    print(f"Available nodes: {', '.join(graph.nodes())}")
+    print(f"\nAvailable nodes: {', '.join(sorted(graph.nodes()))}")
     start = input("Start node: ").strip()
     goal = input("Goal node: ").strip()
+    time_hour_text = input(
+        "Departure hour for travel-time estimate (0-23, default 8): "
+    ).strip()
 
     try:
-        distance, path = shortest_distance_path(graph, start, goal)
+        avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
+
+        if time_hour_text:
+            report_hour = int(time_hour_text)
+            if not 0 <= report_hour <= 23:
+                print("Hour must be between 0 and 23.")
+                return
+        else:
+            report_hour = 8
+
+        path, distance, visited = dijkstra(
+            graph,
+            start,
+            goal,
+            cost_by_distance,
+            return_visited=True,
+            avoid_nodes=avoid_nodes,
+            avoid_edges=avoid_edges,
+        )
         if not path:
             print("No path found.")
             return
 
-        print(f"Shortest distance from {start} to {goal}: {distance}")
-        print(f"Path: {' -> '.join(path)}")
+        # Visual path display
+        print("\nVisual Route (with shortest path highlighted):")
+        print(
+            render_network_grid(
+                graph,
+                path=path,
+                visited_nodes=visited,
+                start_node=start,
+                end_node=goal,
+            )
+        )
+
+        # Detailed path information
+        print(
+            render_path_details(
+                graph,
+                path,
+                distance,
+                cost_type="distance",
+                start_time=report_hour * 60,
+            )
+        )
+
     except ValueError as error:
         print(f"Error: {error}")
 
@@ -49,28 +169,188 @@ def _run_fastest_time_query(graph):
     except ValueError as error:
         print(f"Error: {error}")
 
+def _run_shortest_time_query(graph):
+    print(f"\nAvailable nodes: {', '.join(sorted(graph.nodes()))}")
+    start = input("Start node: ").strip()
+    goal = input("Goal node: ").strip()
+    hour = input("Departure hour (0-23): ").strip()
+
+    try:
+        avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
+
+        start_hour = int(hour)
+        if not 0 <= start_hour <= 23:
+            print("Hour must be between 0 and 23.")
+            return
+
+        start_time = start_hour * 60  # convert hour to minutes
+        path, total_time, visited = dijkstra(
+            graph,
+            start,
+            goal,
+            cost_by_time,
+            start_time,
+            return_visited=True,
+            avoid_nodes=avoid_nodes,
+            avoid_edges=avoid_edges,
+        )
+        if not path:
+            print("No path found.")
+            return
+
+        # Visual path display
+        print(f"\nVisual Route (departure at {start_hour:02d}:00, shortest time highlighted):")
+        print(
+            render_network_grid(
+                graph,
+                path=path,
+                visited_nodes=visited,
+                start_node=start,
+                end_node=goal,
+            )
+        )
+
+        # Detailed path information
+        print(render_path_details(
+            graph,
+            path,
+            total_time,
+            cost_type="time",
+            start_time=start_time
+        ))
+
+    except ValueError as error:
+        print(f"Error: {error}")
+
+
+def _select_network():
+    from dataio.graph_io import import_graph_csv
+    from generator.graph_generator import generate_realistic_graph
+
+    print("\n" + "=" * 50)
+    print("SMART PATH FINDER - Network Selection")
+    print("=" * 50)
+    print("1. Small test graph (6 nodes, simple)")
+    print("2. Realistic network (5x5, mostly 2-4 links per node)")
+    print("3. Mixed network (5x5, includes high-degree hubs)")
+    print("4. Stress network (6x6, denser connectivity)")
+    print("5. Load network from dataset folder")
+
+    choice = input("Select network (1-5): ").strip()
+
+    if choice == "1":
+        print("-> Loaded small test graph")
+        return generate_small_test_graph()
+    if choice == "2":
+        print("-> Generating realistic 5x5 network...")
+        return generate_realistic_graph(5, 5, seed=42, scenario="realistic")
+    if choice == "3":
+        print("-> Generating mixed 5x5 network with hubs...")
+        return generate_realistic_graph(5, 5, seed=42, scenario="mixed")
+    if choice == "4":
+        print("-> Generating stress 6x6 network...")
+        return generate_realistic_graph(6, 6, seed=42, scenario="stress")
+    if choice == "5":
+        dataset_path = input("Dataset folder path (e.g., data/datasets/graph_100): ").strip()
+        try:
+            graph, metadata = import_graph_csv(dataset_path)
+            print(
+                "-> Loaded dataset "
+                f"{metadata.get('dataset_name', 'unknown')} "
+                f"(nodes={len(graph.nodes())})"
+            )
+            return graph
+        except (FileNotFoundError, ValueError) as error:
+            print(f"Could not load dataset: {error}")
+            print("Using small test graph instead.")
+            return generate_small_test_graph()
+
+    print("Invalid choice. Using small test graph.")
+    return generate_small_test_graph()
+
+
+def _generate_and_export_datasets():
+    from generator.generate_datasets import generate_and_export_datasets
+
+    print("\nGenerating datasets (100, 1000, 5000 nodes)...")
+    created = generate_and_export_datasets(seed=42, max_nodes=10000)
+    if not created:
+        print("No datasets generated.")
+        return
+
+    print("Datasets generated in data/datasets:")
+    for name, node_count, elapsed in created:
+        print(f"- {name}: nodes={node_count}, generation={elapsed:.3f}s")
+
+
+def _run_dataset_benchmarks():
+    from evaluation.benchmark_datasets import run_dataset_benchmarks
+
+    print("\nRunning benchmark suite on stored datasets...")
+    rows = run_dataset_benchmarks(runs_per_pair=10)
+    print(f"Benchmark complete. Rows written: {len(rows)}")
+    print("Files updated:")
+    print("- results/runtime_results.csv")
+    print("- results/analysis.txt")
+
+
+def _print_cli_help():
+    print("\nQuick guide:")
+    print("- Pick a network first (or load one from data/datasets/...).")
+    print("- Use option 1 to inspect the current network and node IDs.")
+    print("- Use option 2 or 3 to run shortest-path queries.")
+    print("- Queries support optional avoid nodes/edges (blank to skip).")
+    print("- In route view: S=start, E=end, ●=path, ◍=visited.")
+    print("- Use option 5 to generate datasets and 6 to benchmark them.")
+
+
 def main():
-    graph = generate_small_test_graph()
+    graph = _select_network()
+    _print_cli_help()
 
     while True:
-        print("\n=== Smart Path Finder CLI ===")
-        print("1. Show graph")
+        print("\n" + "=" * 50)
+        print("=== Smart Path Finder CLI ===")
+        print("=" * 50)
+        print("1. Show network visualization")
         print("2. Find shortest distance path")
+<<<<<<< HEAD
         print("3. Find fastest time path")
         print("4. Exit")
         choice = input("Choose an option (1-4): ").strip()
+=======
+        print("3. Find shortest time path")
+        print("4. Change network")
+        print("5. Generate and export datasets")
+        print("6. Benchmark stored datasets")
+        print("7. Exit")
+        choice = input("Choose an option (1-7, h for help): ").strip().lower()
+>>>>>>> ha-test
 
-        if choice == "1":
+        if choice == "h":
+            _print_cli_help()
+        elif choice == "1":
             _print_graph(graph)
         elif choice == "2":
             _run_shortest_path_query(graph)
         elif choice == "3":
+<<<<<<< HEAD
             _run_fastest_time_query(graph)
         elif choice == "4":
+=======
+            _run_shortest_time_query(graph)
+        elif choice == "4":
+            graph = _select_network()
+        elif choice == "5":
+            _generate_and_export_datasets()
+        elif choice == "6":
+            _run_dataset_benchmarks()
+        elif choice == "7":
+>>>>>>> ha-test
             print("Goodbye.")
             break
         else:
-            print("Invalid choice. Please enter 1, 2, or 3.")
+            print("Invalid choice. Please enter 1-7 or h.")
 
 
 if __name__ == "__main__":
