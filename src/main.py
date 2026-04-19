@@ -7,6 +7,7 @@ from algorithms.bidirectional_a_star import bidirectional_a_star
 from algorithms.bidirectional_dijkstra import bidirectional_dijkstra
 from algorithms.dijkstra import dijkstra
 from algorithms.weighted_a_star import weighted_a_star
+from algorithms.landmark_heuristic import precompute_alt_landmarks
 from cost.distance_cost import cost_by_distance
 from cost.time_cost import cost_by_time
 from generator.graph_generator import generate_small_test_graph
@@ -21,6 +22,20 @@ def _ensure_utf8_output():
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
             reconfigure(encoding="utf-8", errors="replace")
+
+
+MAX_TERMINAL_VISUALIZATION_NODES = 1000
+
+
+def _should_render_visualization(graph):
+    node_count = len(graph.nodes())
+    if node_count > MAX_TERMINAL_VISUALIZATION_NODES:
+        print(
+            f"[Visualization skipped: {node_count} nodes exceeds terminal-safe limit "
+            f"({MAX_TERMINAL_VISUALIZATION_NODES}).]"
+        )
+        return False
+    return True
 
 
 def _parse_avoid_nodes(raw_text, valid_nodes):
@@ -77,6 +92,9 @@ def _print_graph(graph):
     """Display graph statistics, visual representation, and adjacency list."""
     print(render_graph_info(graph))
 
+    if not _should_render_visualization(graph):
+        return
+
     print("Visual Road Network:")
     print(render_network_grid(graph))
 
@@ -112,6 +130,21 @@ def _run_shortest_path_query(graph):
         "Distance algorithm [dijkstra/a_star/a_star_alt/weighted_a_star/bidirectional_dijkstra/bidirectional_a_star/compare] (default dijkstra): "
     ).strip().lower() or "dijkstra"
 
+    compare_runs = 3
+    if algo_choice == "compare":
+        compare_runs_text = input(
+            "Compare repetitions per algorithm (default 3): "
+        ).strip()
+        if compare_runs_text:
+            try:
+                compare_runs = int(compare_runs_text)
+                if compare_runs < 1:
+                    print("Compare repetitions must be >= 1.")
+                    return
+            except ValueError:
+                print("Compare repetitions must be an integer.")
+                return
+
     try:
         avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
 
@@ -133,14 +166,38 @@ def _run_shortest_path_query(graph):
         }
 
         if algo_choice == "compare":
+            if hasattr(graph, "distance_heuristic_scale"):
+                graph.distance_heuristic_scale()
+
+            # Exclude one-time ALT setup from table timings for fairer per-query comparison.
+            precompute_alt_landmarks(graph, landmark_count=4)
+
             print("\nDistance algorithm comparison:")
-            print("-" * 74)
-            print(f"{'algorithm':24s} {'cost':>10s} {'exp':>8s} {'ms':>10s} {'path'}")
-            print("-" * 74)
+            print(
+                f"(runs per algorithm: {compare_runs}, runtime measured without stats overhead)"
+            )
+            print("-" * 92)
+            print(
+                f"{'algorithm':24s} {'cost':>10s} {'exp':>8s} {'ms_mean':>10s} {'ms_max':>10s} {'path'}"
+            )
+            print("-" * 92)
 
             comparison_rows = []
             for algo_name, (algo_fn, algo_kwargs) in algorithm_map.items():
-                t0 = time.perf_counter()
+                runtimes_ms = []
+                for _ in range(compare_runs):
+                    t0 = time.perf_counter()
+                    algo_fn(
+                        graph,
+                        start,
+                        goal,
+                        cost_by_distance,
+                        avoid_nodes=avoid_nodes,
+                        avoid_edges=avoid_edges,
+                        **algo_kwargs,
+                    )
+                    runtimes_ms.append((time.perf_counter() - t0) * 1000)
+
                 result = algo_fn(
                     graph,
                     start,
@@ -152,13 +209,14 @@ def _run_shortest_path_query(graph):
                     avoid_edges=avoid_edges,
                     **algo_kwargs,
                 )
-                elapsed_ms = (time.perf_counter() - t0) * 1000
 
                 path = result[0]
                 distance = result[1]
                 visited = result[2] if len(result) >= 3 else []
                 stats = result[3] if len(result) >= 4 and isinstance(result[3], dict) else {}
                 expanded = int(stats.get("expanded_nodes", len(visited)))
+                runtime_mean = sum(runtimes_ms) / len(runtimes_ms)
+                runtime_max = max(runtimes_ms)
 
                 if path:
                     path_preview = f"{path[0]}->{path[-1]} ({len(path)} nodes)"
@@ -166,16 +224,18 @@ def _run_shortest_path_query(graph):
                     path_preview = "unreachable"
 
                 print(
-                    f"{algo_name:24s} {distance:10.2f} {expanded:8d} {elapsed_ms:10.3f} {path_preview}"
+                    f"{algo_name:24s} {distance:10.2f} {expanded:8d} {runtime_mean:10.3f} {runtime_max:10.3f} {path_preview}"
                 )
-                comparison_rows.append((algo_name, path, distance, visited, expanded, elapsed_ms))
+                comparison_rows.append(
+                    (algo_name, path, distance, visited, expanded, runtime_mean, runtime_max)
+                )
 
-            print("-" * 74)
+            print("-" * 92)
 
             baseline = next((row[2] for row in comparison_rows if row[0] == "dijkstra"), None)
             if baseline not in (None, float("inf"), 0):
                 print("Optimality gaps vs Dijkstra (%):")
-                for algo_name, _, distance, _, _, _ in comparison_rows:
+                for algo_name, _, distance, _, _, _, _ in comparison_rows:
                     if distance == float("inf"):
                         gap = float("inf")
                     else:
@@ -213,17 +273,18 @@ def _run_shortest_path_query(graph):
             print("No path found.")
             return
 
-        # Visual path display
-        print("\nVisual Route (with shortest path highlighted):")
-        print(
-            render_network_grid(
-                graph,
-                path=path,
-                visited_nodes=visited,
-                start_node=start,
-                end_node=goal,
+        # Visual path display (skip for very large graphs in terminal mode).
+        if _should_render_visualization(graph):
+            print("\nVisual Route (with shortest path highlighted):")
+            print(
+                render_network_grid(
+                    graph,
+                    path=path,
+                    visited_nodes=visited,
+                    start_node=start,
+                    end_node=goal,
+                )
             )
-        )
 
         # Detailed path information
         print(
@@ -269,17 +330,18 @@ def _run_shortest_time_query(graph):
             print("No path found.")
             return
 
-        # Visual path display
-        print(f"\nVisual Route (departure at {start_hour:02d}:00, shortest time highlighted):")
-        print(
-            render_network_grid(
-                graph,
-                path=path,
-                visited_nodes=visited,
-                start_node=start,
-                end_node=goal,
+        # Visual path display (skip for very large graphs in terminal mode).
+        if _should_render_visualization(graph):
+            print(f"\nVisual Route (departure at {start_hour:02d}:00, shortest time highlighted):")
+            print(
+                render_network_grid(
+                    graph,
+                    path=path,
+                    visited_nodes=visited,
+                    start_node=start,
+                    end_node=goal,
+                )
             )
-        )
 
         # Detailed path information
         print(render_path_details(

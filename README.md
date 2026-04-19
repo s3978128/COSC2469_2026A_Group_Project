@@ -211,6 +211,19 @@ Using current `results/analysis_default.txt` from the isolated default suite
 - Practical interpretation: current heuristic configuration remains strongly
   conservative, so weighted mode is not yet showing measurable quality loss
 
+### Why ALT Can Lose on Some Individual Queries
+
+- Fixed per-query overhead: ALT must evaluate landmark-based heuristic bounds
+  for many candidate nodes; for short/local routes this extra work can dominate.
+- Small search region effect: when source and destination are close, Dijkstra
+  variants may finish quickly before heuristic guidance has much chance to help.
+- Directional/topology effect: some local structures are naturally favorable to
+  bidirectional meeting, making bidirectional Dijkstra very competitive.
+
+Practical interpretation: single-pair compare tables are useful for local
+behavior, while dataset-level averages are the right source for overall method
+ranking.
+
 ## Summary of Findings
 
 This is the short version of the distance-routing story so far.
