@@ -51,7 +51,8 @@ class TestDijkstra(unittest.TestCase):
             start_time=0,
         )
         self.assertEqual(path, ["A", "C", "D", "F"])
-        self.assertAlmostEqual(total_time, 18.0)
+        # Expected: A→C (10*0.85) + C→D (4*0.85) + D→F (6*0.85) = 17.0
+        self.assertAlmostEqual(total_time, 17.0)
 
     def test_negative_cost_raises_error(self):
         def negative_cost(edge, current_time):
