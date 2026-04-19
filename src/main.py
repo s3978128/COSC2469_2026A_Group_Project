@@ -1,4 +1,5 @@
 import time
+import sys
 
 from algorithms.a_star import a_star
 from algorithms.a_star_alt import a_star_alt
@@ -14,6 +15,12 @@ from utils.visualization import (
     render_path_details,
     render_graph_info,
 )
+
+def _ensure_utf8_output():
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
 
 def _parse_avoid_nodes(raw_text, valid_nodes):
@@ -73,8 +80,8 @@ def _print_graph(graph):
     print("Visual Road Network:")
     print(render_network_grid(graph))
 
-    print("\nAdjacency List (Detailed):")
-    print("─" * 70)
+    # print("\nAdjacency List (Detailed):")
+    # print("─" * 70)
     for node in sorted(graph.nodes()):
         neighbor_info = []
         for edge in graph.neighbors(node):
@@ -315,7 +322,7 @@ def _select_network():
         print("-> Generating stress 6x6 network...")
         return generate_realistic_graph(6, 6, seed=42, scenario="stress")
     if choice == "5":
-        dataset_path = input("Dataset folder path (e.g., data/datasets/graph_100): ").strip()
+        dataset_path = input("Dataset folder path (e.g., data/datasets/default/graph_100): ").strip()
         try:
             graph, metadata = import_graph_csv(dataset_path)
             print(
@@ -370,8 +377,9 @@ def _print_cli_help():
 
 
 def main():
-    graph = _select_network()
+    _ensure_utf8_output()
     _print_cli_help()
+    graph = _select_network()
 
     while True:
         print("\n" + "=" * 50)

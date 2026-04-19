@@ -73,6 +73,14 @@ def _list_dataset_dirs(base_dir):
     )
 
 
+def _default_dataset_root():
+    preferred = ROOT / "data" / "datasets" / "default"
+    legacy = ROOT / "data" / "datasets"
+    if preferred.exists():
+        return preferred
+    return legacy
+
+
 def _sample_pairs(graph, pair_count=5):
     nodes = sorted(graph.nodes())
     if len(nodes) < 2:
@@ -108,16 +116,19 @@ def _sample_pairs(graph, pair_count=5):
 
 
 def run_dataset_benchmarks(
-    datasets_dir=ROOT / "data" / "datasets",
+    datasets_dir=None,
     output_csv=ROOT / "results" / "runtime_results.csv",
     output_analysis=ROOT / "results" / "analysis.txt",
     runs_per_pair=10,
     split_runtime_stats=True,
 ):
     """Benchmark registered algorithms against all stored datasets."""
+    if datasets_dir is None:
+        datasets_dir = _default_dataset_root()
+
     dataset_dirs = _list_dataset_dirs(datasets_dir)
     if not dataset_dirs:
-        raise FileNotFoundError("No dataset directories found in data/datasets")
+        raise FileNotFoundError("No dataset directories found in the configured datasets folder")
 
     rows = []
     analysis_lines = []
@@ -280,8 +291,8 @@ def main():
     parser.add_argument(
         "--datasets-dir",
         type=Path,
-        default=ROOT / "data" / "datasets",
-        help="Directory containing dataset subfolders",
+        default=None,
+        help="Directory containing dataset subfolders (default benchmark suite if available)",
     )
     parser.add_argument(
         "--runs-per-pair",

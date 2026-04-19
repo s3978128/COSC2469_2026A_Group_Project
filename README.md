@@ -93,11 +93,25 @@ Visualization legend includes:
 python src/generator/generate_datasets.py
 ```
 
+Default generated sets are written to `data/datasets/default/` so the benchmark
+suite stays separate from ad hoc experimentation.
+
+Suggested layout:
+
+- `data/datasets/default/` - baseline benchmark graphs
+- `data/datasets/experiments/` - optional custom or exploratory graphs
+
 Default generated sets:
 
-- `graph_100` (10x10)
-- `graph_1000` (25x40)
-- `graph_5000` (50x100)
+| Dataset | Grid | Scenario | Intended structure |
+|---|---|---|---|
+| `graph_100` | 10x10 | `realistic` | Mostly 2-4 outgoing roads per node, no hub bias |
+| `graph_1000` | 25x40 | `mixed` | Mostly 2-4 outgoing roads with a small fraction of 5-7 road hubs |
+| `graph_5000` | 50x100 | `mixed` | Larger mixed network with the same hub pattern, used to stress scale |
+
+These are the default benchmark graphs. If you generate additional custom
+graphs, put them under `data/datasets/experiments/` so benchmark results stay
+separated from exploratory runs.
 
 Each dataset folder contains:
 
@@ -141,6 +155,9 @@ Benchmark CSV now also includes explainability/search-effort metrics when
 available (for example expanded node counts) so runtime numbers can be
 interpreted with search behavior.
 
+By default, the benchmark runner uses `data/datasets/default/` when it exists;
+otherwise it falls back to the legacy `data/datasets/` layout.
+
 Recent additions include:
 
 - `a_star` (distance objective)
@@ -163,25 +180,26 @@ Recent additions include:
 
 ## Cross-Dataset Performance Interpretation
 
-Using current `results/analysis.txt` (runs-per-pair = 2):
+Using current `results/analysis_default.txt` from the isolated default suite
+(`runs-per-pair = 1`):
 
 ### graph_100
 
-- Runtime leader: `dijkstra` (`0.3215 ms` mean)
+- Runtime leader: `dijkstra` (`0.3907 ms` mean)
 - Lowest stress: `a_star_alt` (`0.3280` mean)
 - Observation: ALT reduces explored nodes strongly, but small-graph runtime can
   still favor low-overhead baselines
 
 ### graph_1000
 
-- Runtime leader: `a_star_alt` (`2.0849 ms` mean)
+- Runtime leader: `a_star_alt` (`2.6147 ms` mean)
 - Lowest stress: `a_star_alt` (`0.1524` mean)
 - Observation: ALT landmark heuristic outperformed baseline distance methods on
   medium graph size while maintaining `0%` gap
 
 ### graph_5000
 
-- Runtime leader: `a_star_alt` (`6.0912 ms` mean)
+- Runtime leader: `a_star_alt` (`9.5330 ms` mean)
 - Lowest stress: `a_star_alt` (`0.1075` mean)
 - Observation: ALT gives a major large-graph breakthrough, reducing both
   expansion workload and query runtime substantially
@@ -192,6 +210,28 @@ Using current `results/analysis.txt` (runs-per-pair = 2):
   distance algorithms in this run
 - Practical interpretation: current heuristic configuration remains strongly
   conservative, so weighted mode is not yet showing measurable quality loss
+
+## Summary of Findings
+
+This is the short version of the distance-routing story so far.
+
+- `dijkstra` is the safest baseline and still the best choice on very small
+  graphs when setup overhead matters more than search reduction.
+- `a_star` with the default Euclidean heuristic is correct, but the heuristic
+  is not strong enough to produce a consistent runtime win in this codebase.
+- `a_star_alt` is the strongest distance algorithm overall for the current
+  generated datasets because its landmark heuristic cuts search effort enough
+  to win on medium and large graphs.
+- `bidirectional_dijkstra` can reduce explored nodes, but that does not always
+  translate into faster runtime.
+- `bidirectional_a_star` is currently a correctness-oriented experimental
+  method rather than a practical performance winner.
+- The main evaluation lesson is that runtime, search effort, and optimality
+  must be reported together; node expansions alone do not tell the full story.
+- A separate verification run on the isolated default suite in
+  `data/datasets/default/` preserved the same qualitative ranking: Dijkstra is
+  still the safest tiny-graph baseline, and ALT remains the best distance
+  method on the medium/large graphs.
 
 ## Interesting Discoveries / Breakthroughs
 
@@ -431,8 +471,6 @@ accurately evaluate the shortest-distance problem for this project scope.
   networks with care.
 
 ## Limitations and Threats to Validity
-
-Use these points when framing conclusions in reports or presentations.
 
 - Synthetic-graph bias:
   generated grids with realistic tuning are useful, but still simpler than
