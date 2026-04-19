@@ -11,6 +11,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from algorithms.dijkstra import dijkstra
+from algorithms.bidirectional_dijkstra import bidirectional_dijkstra
 from cost.distance_cost import cost_by_distance
 from cost.time_cost import cost_by_time
 from dataio.graph_io import import_graph_csv
@@ -18,7 +19,14 @@ from evaluation.benchmark import benchmark_dijkstra, write_runtime_csv
 
 
 ALGORITHM_REGISTRY = {
-    "dijkstra": dijkstra,
+    "dijkstra": {
+        "fn": dijkstra,
+        "cost_types": ("distance", "time"),
+    },
+    "bidirectional_dijkstra": {
+        "fn": bidirectional_dijkstra,
+        "cost_types": ("distance",),
+    },
 }
 
 
@@ -101,25 +109,34 @@ def run_dataset_benchmarks(
         analysis_lines.append(f"  Edges: {edge_count}")
         analysis_lines.append(f"  Edge/Node ratio: {ratio:.2f}")
 
-        for algo_name, algo_fn in ALGORITHM_REGISTRY.items():
-            distance_rows = benchmark_dijkstra(
-                graph,
-                pairs,
-                algo_fn,
-                cost_by_distance,
-                start_time=0,
-                runs_per_pair=runs_per_pair,
-            )
-            time_rows = benchmark_dijkstra(
-                graph,
-                pairs,
-                algo_fn,
-                cost_by_time,
-                start_time=8 * 60,
-                runs_per_pair=runs_per_pair,
-            )
+        for algo_name, algo_meta in ALGORITHM_REGISTRY.items():
+            algo_fn = algo_meta["fn"]
+            supported_cost_types = algo_meta["cost_types"]
 
-            for cost_type, batch in (("distance", distance_rows), ("time", time_rows)):
+            batches = []
+            if "distance" in supported_cost_types:
+                distance_rows = benchmark_dijkstra(
+                    graph,
+                    pairs,
+                    algo_fn,
+                    cost_by_distance,
+                    start_time=0,
+                    runs_per_pair=runs_per_pair,
+                )
+                batches.append(("distance", distance_rows))
+
+            if "time" in supported_cost_types:
+                time_rows = benchmark_dijkstra(
+                    graph,
+                    pairs,
+                    algo_fn,
+                    cost_by_time,
+                    start_time=8 * 60,
+                    runs_per_pair=runs_per_pair,
+                )
+                batches.append(("time", time_rows))
+
+            for cost_type, batch in batches:
                 for row in batch:
                     row["dataset"] = dataset_dir.name
                     row["algorithm"] = algo_name
@@ -130,10 +147,21 @@ def run_dataset_benchmarks(
                     row["seed"] = metadata.get("seed", "unknown")
                     rows.append(row)
 
-            algo_means = [r["runtime_ms_mean"] for r in distance_rows + time_rows]
+            flattened = [row for _, batch in batches for row in batch]
+            algo_means = [r["runtime_ms_mean"] for r in flattened]
             analysis_lines.append(
-                f"  {algo_name}: mean={statistics.mean(algo_means):.4f} ms, max={max(r['runtime_ms_max'] for r in distance_rows + time_rows):.4f} ms"
+                f"  {algo_name}: mean={statistics.mean(algo_means):.4f} ms, max={max(r['runtime_ms_max'] for r in flattened):.4f} ms"
             )
+
+            expanded_means = [
+                r["expanded_nodes_mean"]
+                for r in flattened
+                if "expanded_nodes_mean" in r
+            ]
+            if expanded_means:
+                analysis_lines.append(
+                    f"    expanded_nodes: mean={statistics.mean(expanded_means):.2f}, max={max(expanded_means):.2f}"
+                )
 
         analysis_lines.append("")
 

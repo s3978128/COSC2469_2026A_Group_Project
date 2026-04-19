@@ -130,10 +130,148 @@ Outputs:
 - `results/runtime_results.csv`
 - `results/analysis.txt`
 
+Benchmark CSV now also includes explainability/search-effort metrics when
+available (for example expanded node counts) so runtime numbers can be
+interpreted with search behavior.
+
 Benchmark runner evaluates each registered algorithm for both objectives:
 
 - distance (`cost_by_distance`)
 - time (`cost_by_time`)
+
+## Bidirectional Search
+
+### Motivation
+
+Single-source Dijkstra expands outward from the start only. Bidirectional
+Dijkstra runs two searches simultaneously:
+
+- forward from source
+- backward from destination
+
+On many graphs this reduces the explored region and can improve runtime.
+
+### Implementation Approach
+
+The project implementation is in `src/algorithms/bidirectional_dijkstra.py` and
+uses:
+
+1. Two priority queues (`forward`, `backward`)
+2. Two distance maps (`dist_f`, `dist_b`)
+3. Two predecessor maps for path reconstruction (`prev_f`, `next_b`)
+4. Stopping rule based on current best meeting cost
+
+The graph model provides cached incoming-edge access via reverse adjacency to
+avoid rebuilding reverse structure for every query.
+
+### Overhead Issue and Fix
+
+Initial bidirectional runs were slower than expected on larger datasets because
+the algorithm repeatedly rebuilt incoming-edge lookup data per query. That
+preprocessing overhead was paid many times during benchmarking and reduced the
+runtime advantage of two-sided search.
+
+The fix was to move reverse-neighbor construction into the graph model as a
+cache that is reused across queries:
+
+- `Graph.reverse_neighbors(node_id)` now reads from `_reverse_adj_cache`
+- cache is built once lazily and reused
+- cache is invalidated only when graph structure changes (for example `add_edge`)
+
+Result: bidirectional search keeps its algorithmic benefit (fewer expanded
+nodes on many queries) without paying repeated reverse-graph setup costs.
+
+### Constraint Handling
+
+Bidirectional search respects the same optional constraints as Dijkstra:
+
+- avoided nodes are never expanded
+- avoided directed edges are skipped in both forward and backward steps
+
+### Explainability Metrics
+
+The algorithm reports search-effort statistics (when `return_stats=True`):
+
+- `expanded_forward`
+- `expanded_backward`
+- `expanded_nodes` (sum)
+
+These are propagated to benchmark CSV summaries as min/mean/max so reported
+runtime can be explained by how much of the graph was actually explored.
+
+### Practical Interpretation
+
+If bidirectional search is faster on a dataset, check whether expanded-node
+metrics are also lower. If runtime does not improve, common causes include:
+
+- directed topology limiting early meeting
+- algorithm overhead dominating on very small graphs
+- query pairs that do not benefit from two-sided expansion
+
+## A* and Quality Metrics
+
+### A* (A-star) in this project context
+
+A* is a best-first shortest-path method that prioritizes nodes using:
+
+$$
+f(n) = g(n) + h(n)
+$$
+
+where:
+
+- $g(n)$ is the exact cost from start to node $n$
+- $h(n)$ is a heuristic estimate from $n$ to goal
+
+For grid-like road graphs with distance objective, a common heuristic is
+Euclidean distance between node coordinates. If $h(n)$ never overestimates true
+remaining cost (admissible), A* returns an optimal path while usually expanding
+fewer nodes than Dijkstra.
+
+Practical notes:
+
+- if $h(n)=0$, A* behaves like Dijkstra
+- better heuristics reduce expansions and runtime
+- for time-dependent costs, heuristic design is harder because edge travel time
+  changes by hour
+
+### Optimality Gap
+
+Optimality gap measures how far an algorithm's route cost is from a reference
+optimal cost (typically Dijkstra for the same objective and constraints):
+
+$$
+\mathrm{gap}(\%) = \frac{C_{alg} - C_{opt}}{C_{opt}} \times 100
+$$
+
+Interpretation:
+
+- `0%` means optimal
+- positive values mean worse-than-optimal cost
+- useful for approximate or bounded-suboptimal methods
+
+### Stress (for search effort/load)
+
+Stress is a workload indicator showing how hard a query was for an algorithm.
+A simple and useful stress metric is expansion ratio:
+
+$$
+\mathrm{stress} = \frac{\mathrm{expanded\_nodes}}{|V|}
+$$
+
+where $|V|$ is total graph nodes. You can also report raw `expanded_nodes`.
+
+Interpretation:
+
+- lower stress usually means less search effort
+- compare stress with runtime to explain why one algorithm is faster or slower
+- high stress with low optimality gap indicates correctness but heavier search
+
+These two metrics complement runtime:
+
+- runtime tells speed
+- optimality gap tells solution quality
+- stress tells search workload
 
 ## Add a New Algorithm
 
