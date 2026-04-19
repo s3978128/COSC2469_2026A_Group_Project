@@ -3,7 +3,16 @@
 from utils.min_heap import MinHeap
 
 
-def dijkstra(graph, start, goal, cost_func, start_time=0, return_visited=False):
+def dijkstra(
+    graph,
+    start,
+    goal,
+    cost_func,
+    start_time=0,
+    return_visited=False,
+    avoid_nodes=None,
+    avoid_edges=None,
+):
     """Run Dijkstra's algorithm with a caller-supplied cost function.
 
     Parameters
@@ -19,6 +28,12 @@ def dijkstra(graph, start, goal, cost_func, start_time=0, return_visited=False):
     return_visited : bool
         When True, also return the list of visited nodes in expansion order.
 
+    avoid_nodes : iterable[str] | None
+        Optional set/list of node ids that must not appear in the route.
+
+    avoid_edges : iterable[tuple[str, str]] | None
+        Optional set/list of directed edges (source, destination) to avoid.
+
     Returns
     -------
     (path, total_cost) or (path, total_cost, visited_order)
@@ -28,6 +43,12 @@ def dijkstra(graph, start, goal, cost_func, start_time=0, return_visited=False):
     """
     if start not in graph.adj or goal not in graph.adj:
         raise ValueError("start and goal must exist in the graph")
+
+    blocked_nodes = set(avoid_nodes or [])
+    blocked_edges = set(avoid_edges or [])
+
+    if start in blocked_nodes or goal in blocked_nodes:
+        raise ValueError("start/goal cannot be in avoid_nodes")
 
     best_cost = {start: 0.0}
     previous = {start: None}
@@ -50,6 +71,10 @@ def dijkstra(graph, start, goal, cost_func, start_time=0, return_visited=False):
 
         for edge in graph.neighbors(node):
             neighbor = edge.destination
+            if neighbor in blocked_nodes:
+                continue
+            if (edge.source, edge.destination) in blocked_edges:
+                continue
             if neighbor in visited:
                 continue
 

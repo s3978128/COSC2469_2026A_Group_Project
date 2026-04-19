@@ -1,20 +1,17 @@
-Scenario: realistic (5x5)
-  Nodes: 25
-  Edges: 72
-  Edge/Node ratio: 2.88
-  Mean runtime across cases: 0.0295 ms
-  Max runtime across cases: 0.0497 ms
+Dataset: graph_100
+  Nodes: 100
+  Edges: 296
+  Edge/Node ratio: 2.96
+  dijkstra: mean=0.1938 ms, max=0.2912 ms
 
-Scenario: mixed (5x5)
-  Nodes: 25
-  Edges: 84
-  Edge/Node ratio: 3.36
-  Mean runtime across cases: 0.0393 ms
-  Max runtime across cases: 0.0818 ms
+Dataset: graph_1000
+  Nodes: 1000
+  Edges: 3466
+  Edge/Node ratio: 3.47
+  dijkstra: mean=1.4208 ms, max=4.4141 ms
 
-Scenario: stress (6x6)
-  Nodes: 36
-  Edges: 178
-  Edge/Node ratio: 4.94
-  Mean runtime across cases: 0.0695 ms
-  Max runtime across cases: 0.0970 ms
+Dataset: graph_5000
+  Nodes: 5000
+  Edges: 17294
+  Edge/Node ratio: 3.46
+  dijkstra: mean=17.7693 ms, max=24.4899 ms

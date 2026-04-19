@@ -31,13 +31,20 @@ def benchmark_dijkstra(
 
         for _ in range(runs_per_pair):
             t0 = time.perf_counter()
-            path, cost = dijkstra_fn(
+            result = dijkstra_fn(
                 graph,
                 start,
                 goal,
                 cost_func,
                 start_time=start_time,
             )
+
+            if not isinstance(result, tuple) or len(result) < 2:
+                raise ValueError(
+                    "Algorithm function must return at least (path, cost)"
+                )
+
+            path, cost = result[0], result[1]
             elapsed_ms = (time.perf_counter() - t0) * 1000
             run_times_ms.append(elapsed_ms)
             final_path = path

@@ -37,7 +37,7 @@ def _bresenham_points(x0, y0, x1, y1):
 
 def _draw_edge(grid, source_pos, dest_pos, char, override=False):
     """Draw an edge between two points on a character grid."""
-    node_symbols = {"○", "●", "◍"}
+    node_symbols = {"○", "●", "◍", "S", "E"}
     points = _bresenham_points(source_pos[0], source_pos[1], dest_pos[0], dest_pos[1])
 
     for x, y in points[1:-1]:
@@ -49,7 +49,14 @@ def _draw_edge(grid, source_pos, dest_pos, char, override=False):
             grid[y][x] = char
 
 
-def render_network_grid(graph, path=None, visited_nodes=None, cell_size=3):
+def render_network_grid(
+    graph,
+    path=None,
+    visited_nodes=None,
+    cell_size=3,
+    start_node=None,
+    end_node=None,
+):
     """Render road network as an ASCII grid visualization.
 
     Parameters
@@ -62,6 +69,10 @@ def render_network_grid(graph, path=None, visited_nodes=None, cell_size=3):
         Nodes visited by the search algorithm.
     cell_size : int
         Spacing between coordinate positions in characters (default 3).
+    start_node : str, optional
+        Start node to mark explicitly in the visualization.
+    end_node : str, optional
+        End node to mark explicitly in the visualization.
 
     Returns
     -------
@@ -98,6 +109,8 @@ def render_network_grid(graph, path=None, visited_nodes=None, cell_size=3):
 
     path_set = set(path or [])
     visited_set = set(visited_nodes or [])
+    effective_start = start_node if start_node is not None else (path[0] if path else None)
+    effective_end = end_node if end_node is not None else (path[-1] if path else None)
     path_edges = set()
     if path and len(path) > 1:
         for i in range(len(path) - 1):
@@ -125,7 +138,11 @@ def render_network_grid(graph, path=None, visited_nodes=None, cell_size=3):
     # Draw nodes last so they remain visible above edges.
     for node_id, (x, y) in normalized_pos.items():
         if 0 <= y < len(grid) and 0 <= x < len(grid[0]):
-            if node_id in path_set:
+            if node_id == effective_start:
+                grid[y][x] = "S"
+            elif node_id == effective_end:
+                grid[y][x] = "E"
+            elif node_id in path_set:
                 grid[y][x] = "●"
             elif node_id in visited_set:
                 grid[y][x] = "◍"
@@ -140,6 +157,8 @@ def render_network_grid(graph, path=None, visited_nodes=None, cell_size=3):
 
     lines.append("")
     lines.append("Legend:")
+    lines.append("  S = start node")
+    lines.append("  E = end node")
     lines.append("  ○ = unvisited node")
     lines.append("  ◍ = visited node")
     lines.append("  ● = shortest-path node")
@@ -180,7 +199,38 @@ def render_path_details(graph, path, cost, cost_type="distance", start_time=0):
     lines.append("╚════════════════════════════════════╝")
     lines.append("")
     lines.append(f"Route: {' → '.join(path)}")
-    lines.append(f"Total {cost_type}: {cost:.2f} {'km' if cost_type == 'distance' else 'min'}")
+
+    # Always report both totals for the selected path.
+    total_distance = 0.0
+    total_travel_time = 0.0
+
+    rolling_time = start_time
+    for i in range(len(path) - 1):
+        from_node = path[i]
+        to_node = path[i + 1]
+
+        edge = None
+        for e in graph.neighbors(from_node):
+            if e.destination == to_node:
+                edge = e
+                break
+
+        if edge is None:
+            continue
+
+        total_distance += edge.distance
+        hour = int(rolling_time // 60) % 24
+        segment_time = edge.get_travel_time(hour)
+        total_travel_time += segment_time
+        rolling_time += segment_time
+
+    lines.append(f"Total distance: {total_distance:.2f} km")
+    lines.append(f"Total travel time: {total_travel_time:.2f} min")
+
+    if cost_type == "distance":
+        lines.append(f"Optimized objective: distance = {cost:.2f} km")
+    else:
+        lines.append(f"Optimized objective: time = {cost:.2f} min")
     lines.append("")
     lines.append("Segment breakdown:")
     lines.append("─" * 70)

@@ -61,6 +61,38 @@ class TestDijkstra(unittest.TestCase):
         with self.assertRaises(ValueError):
             dijkstra(self.graph, "A", "F", negative_cost)
 
+    def test_avoid_nodes_changes_route(self):
+        path, distance = dijkstra(
+            self.graph,
+            "A",
+            "F",
+            cost_by_distance,
+            avoid_nodes={"C"},
+        )
+        self.assertEqual(path, ["A", "B", "D", "F"])
+        self.assertAlmostEqual(distance, 13.0)
+
+    def test_avoid_edges_changes_route(self):
+        path, distance = dijkstra(
+            self.graph,
+            "A",
+            "F",
+            cost_by_distance,
+            avoid_edges={("C", "D")},
+        )
+        self.assertEqual(path, ["A", "B", "D", "F"])
+        self.assertAlmostEqual(distance, 13.0)
+
+    def test_start_or_goal_blocked_raises_error(self):
+        with self.assertRaises(ValueError):
+            dijkstra(
+                self.graph,
+                "A",
+                "F",
+                cost_by_distance,
+                avoid_nodes={"A"},
+            )
+
     def test_return_visited_includes_start_and_goal(self):
         path, distance, visited = dijkstra(
             self.graph,
