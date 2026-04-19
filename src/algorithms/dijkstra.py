@@ -3,7 +3,7 @@
 from utils.min_heap import MinHeap
 
 
-def dijkstra(graph, start, goal, cost_func, start_time=0):
+def dijkstra(graph, start, goal, cost_func, start_time=0, return_visited=False):
     """Run Dijkstra's algorithm with a caller-supplied cost function.
 
     Parameters
@@ -16,9 +16,12 @@ def dijkstra(graph, start, goal, cost_func, start_time=0):
     start_time : Initial time value passed to ``cost_func`` (default 0).
                  For time-based routing in this project, this value is minutes.
 
+    return_visited : bool
+        When True, also return the list of visited nodes in expansion order.
+
     Returns
     -------
-    (path, total_cost)
+    (path, total_cost) or (path, total_cost, visited_order)
         *path* is a list of node ids from *start* to *goal*.
         *total_cost* is the accumulated cost along that path.
         If *goal* is unreachable, returns ``([], float('inf'))``.
@@ -29,6 +32,7 @@ def dijkstra(graph, start, goal, cost_func, start_time=0):
     best_cost = {start: 0.0}
     previous = {start: None}
     visited = set()
+    visited_order = []
 
     pq = MinHeap()
     pq.push((0.0, start_time, start))
@@ -39,6 +43,7 @@ def dijkstra(graph, start, goal, cost_func, start_time=0):
         if node in visited:
             continue
         visited.add(node)
+        visited_order.append(node)
 
         if node == goal:
             break
@@ -62,6 +67,8 @@ def dijkstra(graph, start, goal, cost_func, start_time=0):
 
     # Path reconstruction
     if goal not in best_cost:
+        if return_visited:
+            return [], float('inf'), visited_order
         return [], float('inf')
 
     path = []
@@ -70,5 +77,8 @@ def dijkstra(graph, start, goal, cost_func, start_time=0):
         path.append(current)
         current = previous[current]
     path.reverse()
+
+    if return_visited:
+        return path, best_cost[goal], visited_order
 
     return path, best_cost[goal]

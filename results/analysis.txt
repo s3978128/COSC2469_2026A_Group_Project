@@ -1,0 +1,20 @@
+Scenario: realistic (5x5)
+  Nodes: 25
+  Edges: 72
+  Edge/Node ratio: 2.88
+  Mean runtime across cases: 0.0295 ms
+  Max runtime across cases: 0.0497 ms
+
+Scenario: mixed (5x5)
+  Nodes: 25
+  Edges: 84
+  Edge/Node ratio: 3.36
+  Mean runtime across cases: 0.0393 ms
+  Max runtime across cases: 0.0818 ms
+
+Scenario: stress (6x6)
+  Nodes: 36
+  Edges: 178
+  Edge/Node ratio: 4.94
+  Mean runtime across cases: 0.0695 ms
+  Max runtime across cases: 0.0970 ms

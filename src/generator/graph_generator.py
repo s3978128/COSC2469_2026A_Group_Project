@@ -84,6 +84,20 @@ def generate_small_test_graph():
     """
     graph = Graph()
 
+    # Node coordinates for visualization (arranged in a simple layout)
+    node_coords = {
+        "A": (0.0, 0.0),
+        "B": (1.0, 0.0),
+        "C": (0.0, 2.0),
+        "D": (1.0, 2.0),
+        "E": (2.0, 2.0),
+        "F": (1.0, 4.0),
+    }
+
+    # Add nodes with coordinates
+    for node_id, (x, y) in node_coords.items():
+        graph.add_node(node_id, x=x, y=y)
+
     # Two-way roads: (node_a, node_b, distance_km, base_travel_time_minutes)
     two_way_roads = [
         ("A", "B", 5.0, 8.0),
@@ -129,6 +143,31 @@ class RoadType:
         "avg_speed": 30,
         "ratio": 0.2,
     }
+
+
+SCENARIO_PROFILES = {
+    "realistic": {
+        "base_degree": (2, 4),
+        "hub_degree": None,
+        "hub_fraction": 0.0,
+        "max_connection_distance": 2.0,
+        "two_way_probability": 0.8,
+    },
+    "mixed": {
+        "base_degree": (2, 4),
+        "hub_degree": (5, 7),
+        "hub_fraction": 0.15,
+        "max_connection_distance": 2.4,
+        "two_way_probability": 0.75,
+    },
+    "stress": {
+        "base_degree": (3, 6),
+        "hub_degree": (6, 8),
+        "hub_fraction": 0.30,
+        "max_connection_distance": 3.0,
+        "two_way_probability": 0.70,
+    },
+}
 
 
 def _euclidean_distance(p1, p2):
@@ -228,7 +267,38 @@ def _distance_to_travel_time(distance_km, road_type):
     return (distance_km / speed) * 60
 
 
-def generate_realistic_graph(rows=4, cols=4, seed=42):
+def _build_degree_targets(node_ids, nearby_map, rng, profile):
+    """Build per-node out-degree targets for the selected scenario."""
+    min_degree, max_degree = profile["base_degree"]
+    targets = {
+        node_id: rng.randint(min_degree, max_degree)
+        for node_id in node_ids
+    }
+
+    hub_degree = profile["hub_degree"]
+    hub_fraction = profile["hub_fraction"]
+    if hub_degree and hub_fraction > 0:
+        hub_count = min(len(node_ids), max(1, int(len(node_ids) * hub_fraction)))
+        for hub_id in rng.sample(node_ids, hub_count):
+            targets[hub_id] = rng.randint(hub_degree[0], hub_degree[1])
+
+    # Clamp targets to the number of available nearby nodes.
+    for node_id in node_ids:
+        targets[node_id] = min(targets[node_id], len(nearby_map[node_id]))
+
+    return targets
+
+
+def _add_directed_edge_if_missing(graph, source, destination, distance, time_weights):
+    """Add a directed edge only if the source does not already point to destination."""
+    if any(edge.destination == destination for edge in graph.neighbors(source)):
+        return False
+
+    graph.add_one_way_edge(source, destination, distance, time_weights)
+    return True
+
+
+def generate_realistic_graph(rows=4, cols=4, seed=42, scenario="realistic"):
     """Generate a realistic urban road network on a grid.
 
     Nodes are placed on a grid; edges connect nearby nodes with realistic
@@ -240,12 +310,22 @@ def generate_realistic_graph(rows=4, cols=4, seed=42):
         Grid dimensions (default 4×4 = 16 nodes ≈ 42–52 edges).
     seed : int
         Random seed for reproducibility.
+    scenario : {"realistic", "mixed", "stress"}
+        Connectivity profile:
+        - realistic: mostly 2–4 outgoing roads per node.
+        - mixed: mostly 2–4 with a small fraction of 5–7 road hubs.
+        - stress: denser graph with broader 3–8 connectivity.
 
     Returns
     -------
     Graph
         Directed graph with coordinates and realistic traffic profiles.
     """
+    if scenario not in SCENARIO_PROFILES:
+        valid = ", ".join(sorted(SCENARIO_PROFILES))
+        raise ValueError(f"Unknown scenario '{scenario}'. Expected one of: {valid}")
+
+    profile = SCENARIO_PROFILES[scenario]
     rng = random.Random(seed)
     graph = Graph()
 
@@ -256,55 +336,54 @@ def generate_realistic_graph(rows=4, cols=4, seed=42):
     for node_id, (x, y) in node_positions.items():
         graph.add_node(node_id, x=x, y=y)
 
-    # Connect nearby nodes with realistic roads
-    edge_count = 0
-    target_edges = int(len(node_positions) * 2.8)  # Aim for 2.8x ratio
-    max_connection_distance = 2.0  # km
-
-    for node_id in sorted(node_positions.keys()):
-        if edge_count >= target_edges:
-            break
-
-        nearby = _find_nearby_nodes(
-            node_id, node_positions, max_connection_distance, exclude_self=True
+    node_ids = sorted(node_positions.keys())
+    nearby_map = {
+        node_id: _find_nearby_nodes(
+            node_id,
+            node_positions,
+            profile["max_connection_distance"],
+            exclude_self=True,
         )
+        for node_id in node_ids
+    }
+    degree_targets = _build_degree_targets(node_ids, nearby_map, rng, profile)
 
-        # Connect to 2–4 nearby nodes
-        num_connections = rng.randint(2, min(4, len(nearby)))
+    # Build outgoing links per node; optional reverse links create two-way roads.
+    for node_id in node_ids:
+        candidates = list(nearby_map[node_id])
+        rng.shuffle(candidates)
 
-        for i in range(num_connections):
-            if edge_count >= target_edges:
-                break
+        while len(graph.neighbors(node_id)) < degree_targets[node_id] and candidates:
+            neighbor_id = candidates.pop()
 
-            neighbor_id = nearby[i]
-
-            # Skip if already connected
-            if any(e.destination == neighbor_id for e in graph.neighbors(node_id)):
-                continue
-
-            # Choose road type and sample distance
             road_type = _choose_road_type(rng)
             distance = _sample_road_distance(road_type, rng)
-            base_time = _distance_to_travel_time(distance, road_type)
+            time_weights = _traffic_profile(
+                _distance_to_travel_time(distance, road_type),
+                road_type,
+            )
 
-            # Randomly decide if one-way or two-way (20% one-way)
-            is_one_way = rng.random() < 0.2
+            added = _add_directed_edge_if_missing(
+                graph,
+                node_id,
+                neighbor_id,
+                distance,
+                time_weights,
+            )
+            if not added:
+                continue
 
-            if is_one_way:
-                graph.add_one_way_edge(
-                    node_id,
+            should_add_reverse = rng.random() < profile["two_way_probability"]
+            neighbor_has_capacity = (
+                len(graph.neighbors(neighbor_id)) < degree_targets[neighbor_id]
+            )
+            if should_add_reverse and neighbor_has_capacity:
+                _add_directed_edge_if_missing(
+                    graph,
                     neighbor_id,
-                    distance,
-                    _traffic_profile(base_time, road_type),
-                )
-                edge_count += 1
-            else:
-                graph.add_two_way_edge(
                     node_id,
-                    neighbor_id,
                     distance,
-                    _traffic_profile(base_time, road_type),
+                    time_weights,
                 )
-                edge_count += 2
 
     return graph

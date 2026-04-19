@@ -61,7 +61,7 @@ def benchmark_dijkstra(
 
 def write_runtime_csv(rows, output_path):
     """Write benchmark rows to CSV."""
-    headers = [
+    base_headers = [
         "start",
         "goal",
         "runs",
@@ -71,6 +71,16 @@ def write_runtime_csv(rows, output_path):
         "runtime_ms_mean",
         "runtime_ms_max",
     ]
+
+    extra_headers = sorted(
+        {
+            key
+            for row in rows
+            for key in row.keys()
+            if key not in base_headers
+        }
+    )
+    headers = base_headers + extra_headers
 
     with open(output_path, "w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=headers)

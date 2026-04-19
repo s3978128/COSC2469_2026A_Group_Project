@@ -61,5 +61,18 @@ class TestDijkstra(unittest.TestCase):
         with self.assertRaises(ValueError):
             dijkstra(self.graph, "A", "F", negative_cost)
 
+    def test_return_visited_includes_start_and_goal(self):
+        path, distance, visited = dijkstra(
+            self.graph,
+            "A",
+            "F",
+            cost_by_distance,
+            return_visited=True,
+        )
+        self.assertEqual(path, ["A", "C", "D", "F"])
+        self.assertAlmostEqual(distance, 12.5)
+        self.assertEqual(visited[0], "A")
+        self.assertIn("F", visited)
+
 if __name__ == "__main__":
     unittest.main()
