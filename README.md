@@ -167,6 +167,54 @@ Recent additions include:
 - `stress_*` columns derived from expanded nodes over graph size
 - `optimality_gap_pct` against Dijkstra baseline for each pair/objective
 
+### How Benchmarking Works
+
+The benchmark runner in `src/evaluation/benchmark_datasets.py` follows this
+workflow:
+
+1. Dataset discovery
+- Scans dataset folders containing `nodes.csv` and `edges.csv`.
+- Uses `data/datasets/default/` when available; otherwise falls back to
+  `data/datasets/`.
+
+2. Pair selection per dataset
+- Builds a deterministic sample of reachable start-goal pairs
+  (currently up to 5 pairs per dataset).
+- Reachability is checked with Dijkstra so unreachable pairs do not distort
+  runtime comparisons.
+
+3. Algorithm execution by supported objective
+- Each registered algorithm is run only for its declared cost type(s):
+  - distance: all distance algorithms
+  - time: currently Dijkstra baseline in this setup
+- Start time is fixed per objective for reproducibility:
+  - distance: `0`
+  - time: `8:00` (`8 * 60` minutes)
+
+4. Warmup and timing policy
+- Algorithms with one-time setup can define a warmup hook
+  (for example ALT landmark precomputation).
+- In default split mode, runtime timing is collected separately from stats
+  collection to reduce measurement overhead in latency numbers.
+- In `--no-split-runtime-stats` mode, timing and stats are collected together
+  in a single pass.
+
+5. Aggregation and metrics
+- For each algorithm/pair/objective, repeated runs are summarized as
+  min/mean/max runtime.
+- Explainability metrics (for example expanded nodes) are aggregated similarly.
+- Stress metrics are derived from expansions over graph size:
+  - `stress_mean = expanded_nodes_mean / |V|`
+  - `stress_max = expanded_nodes_max / |V|`
+- Optimality gap is computed against Dijkstra on the same pair/objective:
+  - `optimality_gap_pct = ((C_alg - C_dijkstra) / C_dijkstra) * 100`
+
+6. Output files
+- CSV (`results/runtime_results.csv`): row-level benchmark summaries with
+  metadata (`dataset`, `scenario`, `seed`, objective, runtime/stats fields).
+- Text summary (`results/analysis.txt`): per-dataset interpretation table with
+  runtime/stress/gap rollups.
+
 ## Implemented Approaches (Current)
 
 | Algorithm | Objective(s) | Explainability Stats | Notes |
