@@ -249,14 +249,9 @@ def render_path_details(graph, path, cost, cost_type="distance", start_time=0):
 
         if edge:
             distance = edge.distance
-            if cost_type == "distance":
-                segment_cost = distance
-                unit = "km"
-            else:
-                hour = int(current_time // 60) % 24
-                segment_cost = edge.get_travel_time(hour)
-                unit = "min"
-                current_time += segment_cost
+            hour = int(current_time // 60) % 24
+            segment_time = edge.get_travel_time(hour)
+            current_time += segment_time
 
             # Infer road type from speed
             speed = (distance / edge.get_travel_time(12)) * 60
@@ -269,7 +264,7 @@ def render_path_details(graph, path, cost, cost_type="distance", start_time=0):
 
             lines.append(
                 f"  {from_node:5s} → {to_node:5s}   {distance:6.1f} km   "
-                f"{segment_cost:7.2f} {unit:3s}   {road_type:12s}"
+                f"{segment_time:7.2f} min   {road_type:12s}"
             )
 
     lines.append("─" * 70)
