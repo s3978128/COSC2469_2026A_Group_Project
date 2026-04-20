@@ -1,0 +1,17 @@
+Dataset: graph_100
+  Nodes: 100
+  Edges: 296
+  Edge/Node ratio: 2.96
+  dijkstra: mean=0.1938 ms, max=0.2912 ms
+
+Dataset: graph_1000
+  Nodes: 1000
+  Edges: 3466
+  Edge/Node ratio: 3.47
+  dijkstra: mean=1.4208 ms, max=4.4141 ms
+
+Dataset: graph_5000
+  Nodes: 5000
+  Edges: 17294
+  Edge/Node ratio: 3.46
+  dijkstra: mean=17.7693 ms, max=24.4899 ms

@@ -1,47 +1,109 @@
-"""Dijkstra shortest path (distance-based) for adjacency-list graphs."""
+"""Generic Dijkstra shortest-path algorithm for adjacency-list graphs."""
 
-import heapq
-from math import inf
+from utils.min_heap import MinHeap
 
 
-def shortest_distance_path(graph, start, goal):
-	"""Return (total_distance, path_nodes) from start to goal.
+def dijkstra(
+    graph,
+    start,
+    goal,
+    cost_func,
+    start_time=0,
+    return_visited=False,
+    avoid_nodes=None,
+    avoid_edges=None,
+):
+    """Run Dijkstra's algorithm with a caller-supplied cost function.
 
-	If goal is unreachable, returns (inf, []).
-	"""
-	if start not in graph.adj or goal not in graph.adj:
-		raise ValueError("start and goal must exist in the graph")
+    Parameters
+    ----------
+    graph      : Graph object whose ``neighbors(node_id)`` returns Edge objects.
+    start      : Start node id.
+    goal       : Destination node id.
+    cost_func  : Callable ``(edge, current_time) -> float`` that returns the
+                 traversal cost of an edge given the current accumulated time.
+    start_time : Initial time value passed to ``cost_func`` (default 0).
+                 For time-based routing in this project, this value is minutes.
 
-	distances = {node: inf for node in graph.nodes()}
-	previous = {node: None for node in graph.nodes()}
-	distances[start] = 0.0
+    return_visited : bool
+        When True, also return the list of visited nodes in expansion order.
 
-	pq = [(0.0, start)]
+    avoid_nodes : iterable[str] | None
+        Optional set/list of node ids that must not appear in the route.
 
-	while pq:
-		current_distance, node = heapq.heappop(pq)
+    avoid_edges : iterable[tuple[str, str]] | None
+        Optional set/list of directed edges (source, destination) to avoid.
 
-		if current_distance > distances[node]:
-			continue
+    Returns
+    -------
+    (path, total_cost) or (path, total_cost, visited_order)
+        *path* is a list of node ids from *start* to *goal*.
+        *total_cost* is the accumulated cost along that path.
+        If *goal* is unreachable, returns ``([], float('inf'))``.
+    """
+    if start not in graph.adj or goal not in graph.adj:
+        raise ValueError("start and goal must exist in the graph")
 
-		if node == goal:
-			break
+    blocked_nodes = set(avoid_nodes or [])
+    blocked_edges = set(avoid_edges or [])
 
-		for edge in graph.neighbors(node):
-			new_distance = current_distance + edge.distance
-			if new_distance < distances[edge.destination]:
-				distances[edge.destination] = new_distance
-				previous[edge.destination] = node
-				heapq.heappush(pq, (new_distance, edge.destination))
+    if start in blocked_nodes or goal in blocked_nodes:
+        raise ValueError("start/goal cannot be in avoid_nodes")
 
-	if distances[goal] == inf:
-		return inf, []
+    best_cost = {start: 0.0}
+    previous = {start: None}
+    visited = set()
+    visited_order = []
 
-	path = []
-	current = goal
-	while current is not None:
-		path.append(current)
-		current = previous[current]
-	path.reverse()
+    pq = MinHeap()
+    pq.push((0.0, start_time, start))
 
-	return distances[goal], path
+    while not pq.is_empty():
+        current_cost, current_time, node = pq.pop()
+
+        if node in visited:
+            continue
+        visited.add(node)
+        visited_order.append(node)
+
+        if node == goal:
+            break
+
+        for edge in graph.neighbors(node):
+            neighbor = edge.destination
+            if neighbor in blocked_nodes:
+                continue
+            if (edge.source, edge.destination) in blocked_edges:
+                continue
+            if neighbor in visited:
+                continue
+
+            edge_cost = cost_func(edge, current_time)
+            if edge_cost < 0:
+                raise ValueError("Dijkstra requires non-negative edge costs")
+
+            new_cost = current_cost + edge_cost
+            new_time = current_time + edge_cost
+
+            if neighbor not in best_cost or new_cost < best_cost[neighbor]:
+                best_cost[neighbor] = new_cost
+                previous[neighbor] = node
+                pq.push((new_cost, new_time, neighbor))
+
+    # Path reconstruction
+    if goal not in best_cost:
+        if return_visited:
+            return [], float('inf'), visited_order
+        return [], float('inf')
+
+    path = []
+    current = goal
+    while current is not None:
+        path.append(current)
+        current = previous[current]
+    path.reverse()
+
+    if return_visited:
+        return path, best_cost[goal], visited_order
+
+    return path, best_cost[goal]
