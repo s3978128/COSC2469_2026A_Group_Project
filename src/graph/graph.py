@@ -12,6 +12,7 @@ class Graph:
         self.adj = {}     # node_id -> list[Edge]
         self._reverse_adj_cache = None  # node_id -> list[(pred_id, edge)]
         self._distance_heuristic_scale_cache = None
+        self._time_heuristic_scale_cache = None
         self._alt_landmark_cache = None
 
     # ── Node operations ──────────────────────────────────────────────
@@ -43,6 +44,7 @@ class Graph:
         # Any edge mutation invalidates reverse-index cache.
         self._reverse_adj_cache = None
         self._distance_heuristic_scale_cache = None
+        self._time_heuristic_scale_cache = None
         self._alt_landmark_cache = None
 
     def add_two_way_edge(self, node_a, node_b, distance, time_weights):
@@ -114,6 +116,46 @@ class Graph:
 
         self._distance_heuristic_scale_cache = min_ratio if found_ratio else 0.0
         return self._distance_heuristic_scale_cache
+
+    def time_heuristic_scale(self):
+        """Return a safe scale for Euclidean lower-bound time heuristics.
+
+        Computes ``min over all edges of (min_travel_time / euclidean_distance)``.
+        This gives a scale in minutes-per-km such that
+        ``h(n) = scale * euclidean(n, goal)`` is always <= actual travel time,
+        making it admissible for time-dependent A* queries with cost_by_time.
+        """
+        if self._time_heuristic_scale_cache is not None:
+            return self._time_heuristic_scale_cache
+
+        min_ratio = float("inf")
+        found_ratio = False
+
+        for source, edges in self.adj.items():
+            source_node = self.get_node(source)
+            if source_node is None:
+                continue
+            if source_node.x is None or source_node.y is None:
+                continue
+
+            for edge in edges:
+                dest_node = self.get_node(edge.destination)
+                if dest_node is None:
+                    continue
+                if dest_node.x is None or dest_node.y is None:
+                    continue
+
+                euclidean = self.euclidean_distance(source_node, dest_node)
+                if euclidean <= 0:
+                    continue
+
+                min_time = min(edge.time_list)
+                ratio = min_time / euclidean
+                min_ratio = min(min_ratio, ratio)
+                found_ratio = True
+
+        self._time_heuristic_scale_cache = min_ratio if found_ratio else 0.0
+        return self._time_heuristic_scale_cache
 
     def nodes(self):
         """Return a list of all node IDs."""
