@@ -1,13 +1,14 @@
 import time
 import sys
 
-from algorithms.a_star import a_star
+from algorithms.a_star import a_star, time_euclidean_heuristic
 from algorithms.a_star_alt import a_star_alt
+from algorithms.a_star_time_alt import a_star_time_alt
 from algorithms.bidirectional_a_star import bidirectional_a_star
 from algorithms.bidirectional_dijkstra import bidirectional_dijkstra
 from algorithms.dijkstra import dijkstra
 from algorithms.weighted_a_star import weighted_a_star
-from algorithms.landmark_heuristic import precompute_alt_landmarks
+from algorithms.landmark_heuristic import precompute_alt_landmarks, precompute_time_alt_landmarks
 from cost.distance_cost import cost_by_distance
 from cost.time_cost import cost_by_time
 from generator.graph_generator import generate_small_test_graph
@@ -307,7 +308,7 @@ def _run_shortest_time_query(graph):
     goal = input("Goal node: ").strip()
     hour = input("Departure hour (0-23): ").strip()
     algo_choice = input(
-        "Time algorithm [dijkstra/a_star/a_star_alt/weighted_a_star/bidirectional_dijkstra/bidirectional_a_star/compare] (default dijkstra): "
+        "Time algorithm [dijkstra/a_star/a_star_alt/a_star_time_alt/weighted_a_star/compare] (default dijkstra): "
     ).strip().lower() or "dijkstra"
 
     compare_runs = 3
@@ -335,18 +336,28 @@ def _run_shortest_time_query(graph):
 
         start_time = start_hour * 60  # convert hour to minutes
 
+        # All algorithms use admissible time-based heuristics:
+        # - a_star: time_euclidean_heuristic (scale * euclidean in minutes)
+        # - a_star_alt: time_alt_heuristic via a_star_time_alt (landmark-based, tighter)
+        # - a_star_time_alt: same as a_star_alt for time (explicit wrapper)
+        # - weighted_a_star: time_euclidean_heuristic with w=1.25 (intentionally
+        #   suboptimal for speed tradeoff, same as distance mode)
+        # - bidirectional_dijkstra/a_star: not included (backward search cannot
+        #   evaluate time-dependent costs without knowing arrival time)
         algorithm_map = {
             "dijkstra": (dijkstra, {}),
-            "a_star": (a_star, {}),
-            "a_star_alt": (a_star_alt, {"landmark_count": 4}),
-            "weighted_a_star": (weighted_a_star, {"heuristic_weight": 1.25}),
-            "bidirectional_dijkstra": (bidirectional_dijkstra, {}),
-            "bidirectional_a_star": (bidirectional_a_star, {}),
+            "a_star": (a_star, {"heuristic_fn": time_euclidean_heuristic}),
+            "a_star_alt": (a_star_time_alt, {"landmark_count": 4}),
+            "a_star_time_alt": (a_star_time_alt, {"landmark_count": 4}),
+            "weighted_a_star": (weighted_a_star, {
+                "heuristic_weight": 1.25,
+                "heuristic_fn": time_euclidean_heuristic,
+            }),
         }
-
         if algo_choice == "compare":
             # Exclude one-time ALT setup from table timings for fairer per-query comparison.
             precompute_alt_landmarks(graph, landmark_count=4)
+            precompute_time_alt_landmarks(graph, landmark_count=4)
 
             print("\nTime algorithm comparison:")
             print(
