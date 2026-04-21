@@ -115,6 +115,110 @@ def precompute_alt_landmarks(graph, landmark_count=4):
     _ensure_alt_cache(graph, landmark_count=landmark_count)
 
 
+# ---------------------------------------------------------------------------
+# Time-based ALT: uses min travel time across all 24 hours as edge cost.
+# This is always a valid lower bound on cost_by_time, making the heuristic
+# admissible and consistent for time-dependent A* queries.
+# ---------------------------------------------------------------------------
+
+def _min_travel_time(edge):
+    """Return the minimum travel time for an edge over all 24 hours."""
+    return min(edge.time_list)
+
+
+def _single_source_min_time_distances(graph, source, use_reverse=False):
+    """Dijkstra from *source* using min-over-24h travel time as edge cost."""
+    if source not in graph.adj:
+        return {}
+
+    distances = {source: 0.0}
+    settled = set()
+    pq = MinHeap()
+    pq.push((0.0, source))
+
+    while not pq.is_empty():
+        current_cost, node = pq.pop()
+        if node in settled:
+            continue
+        settled.add(node)
+
+        if use_reverse:
+            for predecessor, edge in graph.reverse_neighbors(node):
+                edge_cost = _min_travel_time(edge)
+                new_cost = current_cost + edge_cost
+                if new_cost < distances.get(predecessor, float("inf")):
+                    distances[predecessor] = new_cost
+                    pq.push((new_cost, predecessor))
+        else:
+            for edge in graph.neighbors(node):
+                edge_cost = _min_travel_time(edge)
+                new_cost = current_cost + edge_cost
+                if new_cost < distances.get(edge.destination, float("inf")):
+                    distances[edge.destination] = new_cost
+                    pq.push((new_cost, edge.destination))
+
+    return distances
+
+
+def _ensure_time_alt_cache(graph, landmark_count=4):
+    """Build and cache time-based ALT landmark tables on the graph object."""
+    requested_count = max(1, int(landmark_count))
+
+    cache = getattr(graph, "_time_alt_landmark_cache", None)
+    if cache and cache.get("landmark_count") == requested_count:
+        return cache
+
+    landmarks = _select_landmarks(graph, requested_count)
+    dist_from = {}
+    dist_to = {}
+    for landmark in landmarks:
+        dist_from[landmark] = _single_source_min_time_distances(graph, landmark, use_reverse=False)
+        dist_to[landmark] = _single_source_min_time_distances(graph, landmark, use_reverse=True)
+
+    cache = {
+        "landmark_count": requested_count,
+        "landmarks": tuple(landmarks),
+        "dist_from": dist_from,
+        "dist_to": dist_to,
+    }
+    graph._time_alt_landmark_cache = cache
+    return cache
+
+
+def precompute_time_alt_landmarks(graph, landmark_count=4):
+    """Force-build time-based ALT landmark cache before query-time measurements."""
+    _ensure_time_alt_cache(graph, landmark_count=landmark_count)
+
+
+def time_alt_heuristic(graph, node_id, goal_id, landmark_count=4):
+    """Admissible ALT lower-bound on travel time for time-dependent routing.
+
+    Uses min-over-24h travel time distances to landmarks.  The lower bound is
+    always <= the actual cost_by_time path cost, so A* remains optimal.
+    """
+    if node_id == goal_id:
+        return 0.0
+
+    cache = _ensure_time_alt_cache(graph, landmark_count=landmark_count)
+    lower_bound = 0.0
+
+    for landmark in cache["landmarks"]:
+        from_l = cache["dist_from"][landmark]
+        to_l = cache["dist_to"][landmark]
+
+        l_to_goal = from_l.get(goal_id)
+        l_to_node = from_l.get(node_id)
+        if l_to_goal is not None and l_to_node is not None:
+            lower_bound = max(lower_bound, l_to_goal - l_to_node)
+
+        node_to_l = to_l.get(node_id)
+        goal_to_l = to_l.get(goal_id)
+        if node_to_l is not None and goal_to_l is not None:
+            lower_bound = max(lower_bound, node_to_l - goal_to_l)
+
+    return max(0.0, lower_bound)
+
+
 def alt_heuristic(graph, node_id, goal_id, landmark_count=4):
     """Return ALT lower-bound estimate for directed graphs.
 
