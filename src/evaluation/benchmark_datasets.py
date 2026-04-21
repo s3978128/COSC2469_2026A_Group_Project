@@ -30,15 +30,16 @@ ALGORITHM_REGISTRY = {
     },
     "bidirectional_dijkstra": {
         "fn": bidirectional_dijkstra,
-        "cost_types": ("distance",),
+        # Raises ValueError for start_time != 0; time batch is skipped gracefully.
+        "cost_types": ("distance", "time"),
     },
     "a_star": {
         "fn": a_star,
-        "cost_types": ("distance",),
+        "cost_types": ("distance", "time"),
     },
     "a_star_alt": {
         "fn": a_star_alt,
-        "cost_types": ("distance",),
+        "cost_types": ("distance", "time"),
         "kwargs": {"landmark_count": 4},
         "warmup": lambda graph, kwargs: precompute_alt_landmarks(
             graph,
@@ -47,12 +48,13 @@ ALGORITHM_REGISTRY = {
     },
     "weighted_a_star": {
         "fn": weighted_a_star,
-        "cost_types": ("distance",),
+        "cost_types": ("distance", "time"),
         "kwargs": {"heuristic_weight": 1.25},
     },
     "bidirectional_a_star": {
         "fn": bidirectional_a_star,
-        "cost_types": ("distance",),
+        # Raises ValueError for start_time != 0; time batch is skipped gracefully.
+        "cost_types": ("distance", "time"),
     },
 }
 
@@ -121,14 +123,26 @@ def run_dataset_benchmarks(
     output_analysis=ROOT / "results" / "analysis.txt",
     runs_per_pair=10,
     split_runtime_stats=True,
+    departure_hour=8,
 ):
-    """Benchmark registered algorithms against all stored datasets."""
+    """Benchmark registered algorithms against all stored datasets.
+
+    Parameters
+    ----------
+    departure_hour : int
+        Departure hour (0–23) used as start_time (in minutes) for
+        time-based benchmarks.  Default is 8 (08:00).
+    """
     if datasets_dir is None:
         datasets_dir = _default_dataset_root()
 
     dataset_dirs = _list_dataset_dirs(datasets_dir)
     if not dataset_dirs:
         raise FileNotFoundError("No dataset directories found in the configured datasets folder")
+
+    if not 0 <= departure_hour <= 23:
+        raise ValueError("departure_hour must be between 0 and 23")
+    departure_start_time = departure_hour * 60
 
     rows = []
     analysis_lines = []
@@ -203,10 +217,17 @@ def run_dataset_benchmarks(
                 batches.append(("distance", distance_rows))
 
             if "time" in supported_cost_types:
-                time_rows = _run_batch(cost_by_time, 8 * 60)
-                batches.append(("time", time_rows))
+                try:
+                    time_rows = _run_batch(cost_by_time, departure_start_time)
+                    batches.append(("time", time_rows))
+                except ValueError as skip_err:
+                    # Some algorithms (e.g. bidirectional_dijkstra,
+                    # bidirectional_a_star) reject start_time != 0.
+                    batches.append(("time_skipped", str(skip_err)))
 
             for cost_type, batch in batches:
+                if cost_type == "time_skipped":
+                    continue  # skipped batches hold an error string, not rows
                 for row in batch:
                     row["dataset"] = dataset_dir.name
                     row["algorithm"] = algo_name
@@ -226,27 +247,10 @@ def run_dataset_benchmarks(
                     rows.append(row)
                     dataset_rows.append(row)
 
-            flattened = [row for _, batch in batches for row in batch]
-            algo_means = [r["runtime_ms_mean"] for r in flattened]
-            analysis_lines.append(
-                f"  {algo_name}: mean={statistics.mean(algo_means):.4f} ms, max={max(r['runtime_ms_max'] for r in flattened):.4f} ms"
-            )
-
-            expanded_means = [
-                r["expanded_nodes_mean"]
-                for r in flattened
-                if "expanded_nodes_mean" in r
-            ]
-            if expanded_means:
-                analysis_lines.append(
-                    f"    expanded_nodes: mean={statistics.mean(expanded_means):.2f}, max={max(expanded_means):.2f}"
-                )
-
-            stress_means = [r["stress_mean"] for r in flattened if "stress_mean" in r]
-            if stress_means:
-                analysis_lines.append(
-                    f"    stress: mean={statistics.mean(stress_means):.4f}, max={max(stress_means):.4f}"
-                )
+            # Record skip reasons for the analysis text
+            for cost_type, batch in batches:
+                if cost_type == "time_skipped":
+                    algo_meta.setdefault("_skip_reasons", {})[dataset_dir.name] = batch
 
         baseline_cost = {
             (row["start"], row["goal"], row["cost_type"]): row["total_cost"]
@@ -263,16 +267,71 @@ def run_dataset_benchmarks(
                 (row["total_cost"] - baseline) / baseline
             ) * 100.0
 
-        for algo_name, _ in ALGORITHM_REGISTRY.items():
-            gap_values = [
-                row["optimality_gap_pct"]
-                for row in dataset_rows
-                if row.get("algorithm") == algo_name and "optimality_gap_pct" in row
-            ]
-            if gap_values:
+        def _algo_section(cost_type_filter):
+            """Append per-algorithm runtime/expansion stats for one cost type."""
+            for aname in ALGORITHM_REGISTRY:
+                arows = [
+                    r for r in dataset_rows
+                    if r.get("algorithm") == aname
+                    and r.get("cost_type") == cost_type_filter
+                ]
+                if not arows:
+                    # Check if this algorithm was skipped for this cost type
+                    skip_reason = ALGORITHM_REGISTRY[aname].get(
+                        "_skip_reasons", {}
+                    ).get(dataset_dir.name)
+                    if skip_reason and cost_type_filter == "time":
+                        analysis_lines.append(f"  {aname}: (skipped — {skip_reason})")
+                    continue
+                ms_means = [r["runtime_ms_mean"] for r in arows]
+                ms_maxes = [r["runtime_ms_max"] for r in arows]
                 analysis_lines.append(
-                    f"  {algo_name} gap: mean={statistics.mean(gap_values):.4f}%, max={max(gap_values):.4f}%"
+                    f"  {aname}: mean={statistics.mean(ms_means):.4f} ms, "
+                    f"max={max(ms_maxes):.4f} ms"
                 )
+                exp_means = [
+                    r["expanded_nodes_mean"] for r in arows if "expanded_nodes_mean" in r
+                ]
+                if exp_means:
+                    analysis_lines.append(
+                        f"    expanded_nodes: mean={statistics.mean(exp_means):.2f}, "
+                        f"max={max(exp_means):.2f}"
+                    )
+                stress_means = [r["stress_mean"] for r in arows if "stress_mean" in r]
+                if stress_means:
+                    analysis_lines.append(
+                        f"    stress: mean={statistics.mean(stress_means):.4f}, "
+                        f"max={max(stress_means):.4f}"
+                    )
+
+        def _gap_section(cost_type_filter, label_suffix=""):
+            """Append optimality gap lines for one cost type."""
+            for aname in ALGORITHM_REGISTRY:
+                gap_values = [
+                    row["optimality_gap_pct"]
+                    for row in dataset_rows
+                    if row.get("algorithm") == aname
+                    and row.get("cost_type") == cost_type_filter
+                    and "optimality_gap_pct" in row
+                ]
+                if gap_values:
+                    analysis_lines.append(
+                        f"  {aname}{label_suffix} gap: "
+                        f"mean={statistics.mean(gap_values):.4f}%, "
+                        f"max={max(gap_values):.4f}%"
+                    )
+
+        # ── Distance-based analysis ───────────────────────────────────────────
+        analysis_lines.append("  [Distance-based]")
+        _algo_section("distance")
+        _gap_section("distance")
+
+        # ── Time-based analysis ───────────────────────────────────────────────
+        analysis_lines.append(
+            f"  [Time-based (departure: {departure_hour:02d}:00)]"
+        )
+        _algo_section("time")
+        _gap_section("time", label_suffix=" (time)")
 
         analysis_lines.append("")
 
@@ -317,6 +376,13 @@ def main():
         action="store_true",
         help="Disable split runtime/stat collection and measure both together",
     )
+    parser.add_argument(
+        "--departure-hour",
+        type=int,
+        default=8,
+        metavar="HOUR",
+        help="Departure hour (0-23) used as start_time for time-based benchmarks (default: 8)",
+    )
     args = parser.parse_args()
 
     rows = run_dataset_benchmarks(
@@ -325,6 +391,7 @@ def main():
         output_analysis=args.output_analysis,
         runs_per_pair=args.runs_per_pair,
         split_runtime_stats=not args.no_split_runtime_stats,
+        departure_hour=args.departure_hour,
     )
     print(f"Benchmark complete. Wrote {len(rows)} rows.")
     print(f"Runtime CSV: {args.output_csv}")
