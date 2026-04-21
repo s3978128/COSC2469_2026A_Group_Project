@@ -12,9 +12,10 @@ if str(SRC) not in sys.path:
 
 from algorithms.dijkstra import dijkstra
 from algorithms.bidirectional_dijkstra import bidirectional_dijkstra
-from algorithms.a_star import a_star
+from algorithms.a_star import a_star, time_euclidean_heuristic
 from algorithms.a_star_alt import a_star_alt
-from algorithms.landmark_heuristic import precompute_alt_landmarks
+from algorithms.a_star_time_alt import a_star_time_alt
+from algorithms.landmark_heuristic import precompute_alt_landmarks, precompute_time_alt_landmarks
 from algorithms.weighted_a_star import weighted_a_star
 from algorithms.bidirectional_a_star import bidirectional_a_star
 from cost.distance_cost import cost_by_distance
@@ -30,31 +31,52 @@ ALGORITHM_REGISTRY = {
     },
     "bidirectional_dijkstra": {
         "fn": bidirectional_dijkstra,
-        # Raises ValueError for start_time != 0; time batch is skipped gracefully.
-        "cost_types": ("distance", "time"),
+        # Backward search cannot evaluate time-dependent costs; skipped for time.
+        "cost_types": ("distance",),
     },
     "a_star": {
         "fn": a_star,
+        # Distance queries: default distance heuristic (scale * euclidean km).
+        # Time queries: time_euclidean_heuristic (scale * euclidean minutes) —
+        # admissible lower bound on travel time.
         "cost_types": ("distance", "time"),
+        "time_kwargs": {"heuristic_fn": time_euclidean_heuristic},
     },
     "a_star_alt": {
         "fn": a_star_alt,
-        "cost_types": ("distance", "time"),
+        # Distance queries: ALT landmarks on edge.distance (km).
+        # Time queries: redirected to a_star_time_alt with time-based ALT
+        # landmarks — admissible lower bound on travel time.
+        "cost_types": ("distance",),
         "kwargs": {"landmark_count": 4},
         "warmup": lambda graph, kwargs: precompute_alt_landmarks(
             graph,
             landmark_count=kwargs.get("landmark_count", 4),
         ),
     },
+    "a_star_time_alt": {
+        "fn": a_star_time_alt,
+        # Time-based ALT: landmarks on min(time_list) — admissible for time.
+        "cost_types": ("time",),
+        "kwargs": {"landmark_count": 4},
+        "warmup": lambda graph, kwargs: precompute_time_alt_landmarks(
+            graph,
+            landmark_count=kwargs.get("landmark_count", 4),
+        ),
+    },
     "weighted_a_star": {
         "fn": weighted_a_star,
+        # Distance queries: default distance heuristic with w=1.25.
+        # Time queries: time_euclidean_heuristic with w=1.25 — intentionally
+        # suboptimal (trades optimality for speed), but heuristic is admissible.
         "cost_types": ("distance", "time"),
         "kwargs": {"heuristic_weight": 1.25},
+        "time_kwargs": {"heuristic_weight": 1.25, "heuristic_fn": time_euclidean_heuristic},
     },
     "bidirectional_a_star": {
         "fn": bidirectional_a_star,
-        # Raises ValueError for start_time != 0; time batch is skipped gracefully.
-        "cost_types": ("distance", "time"),
+        # Backward search cannot evaluate time-dependent costs; skipped for time.
+        "cost_types": ("distance",),
     },
 }
 
@@ -167,6 +189,7 @@ def run_dataset_benchmarks(
             algo_fn = algo_meta["fn"]
             supported_cost_types = algo_meta["cost_types"]
             algo_kwargs = algo_meta.get("kwargs", {})
+            algo_time_kwargs = algo_meta.get("time_kwargs", algo_kwargs)
             warmup_fn = algo_meta.get("warmup")
 
             if warmup_fn is not None:
@@ -174,7 +197,7 @@ def run_dataset_benchmarks(
 
             batches = []
 
-            def _run_batch(cost_fn, batch_start_time):
+            def _run_batch(cost_fn, batch_start_time, kwargs):
                 runtime_rows = benchmark_dijkstra(
                     graph,
                     pairs,
@@ -182,7 +205,7 @@ def run_dataset_benchmarks(
                     cost_fn,
                     start_time=batch_start_time,
                     runs_per_pair=runs_per_pair,
-                    algorithm_kwargs=algo_kwargs,
+                    algorithm_kwargs=kwargs,
                     collect_stats=not split_runtime_stats,
                 )
 
@@ -196,7 +219,7 @@ def run_dataset_benchmarks(
                     cost_fn,
                     start_time=batch_start_time,
                     runs_per_pair=runs_per_pair,
-                    algorithm_kwargs=algo_kwargs,
+                    algorithm_kwargs=kwargs,
                     collect_stats=True,
                 )
 
@@ -213,12 +236,12 @@ def run_dataset_benchmarks(
                 return merged_rows
 
             if "distance" in supported_cost_types:
-                distance_rows = _run_batch(cost_by_distance, 0)
+                distance_rows = _run_batch(cost_by_distance, 0, algo_kwargs)
                 batches.append(("distance", distance_rows))
 
             if "time" in supported_cost_types:
                 try:
-                    time_rows = _run_batch(cost_by_time, departure_start_time)
+                    time_rows = _run_batch(cost_by_time, departure_start_time, algo_time_kwargs)
                     batches.append(("time", time_rows))
                 except ValueError as skip_err:
                     # Some algorithms (e.g. bidirectional_dijkstra,
