@@ -25,6 +25,27 @@ def _default_heuristic(graph, node_id, goal_id):
     return scale * graph.euclidean_distance(node, goal)
 
 
+def time_euclidean_heuristic(graph, node_id, goal_id):
+    """Admissible Euclidean heuristic for time-dependent routing.
+
+    Uses ``time_heuristic_scale * euclidean_distance`` as a lower bound on
+    remaining travel time in minutes.  The scale is precomputed as
+    ``min(min_travel_time / euclidean)`` over all edges, ensuring that
+    h(n) <= actual_cost_by_time for any departure time.
+    Falls back to 0.0 if coordinates are missing.
+    """
+    node = graph.get_node(node_id)
+    goal = graph.get_node(goal_id)
+    if node is None or goal is None:
+        return 0.0
+    if node.x is None or node.y is None or goal.x is None or goal.y is None:
+        return 0.0
+    scale = 0.0
+    if hasattr(graph, "time_heuristic_scale"):
+        scale = float(graph.time_heuristic_scale())
+    return scale * graph.euclidean_distance(node, goal)
+
+
 def a_star(
     graph,
     start,
