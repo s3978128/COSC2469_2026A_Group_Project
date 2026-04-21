@@ -1,7 +1,12 @@
-"""A* wrapper using ALT landmark heuristics."""
+"""A* wrapper using ALT landmark heuristics.
+
+Supports both distance-based and time-based landmark heuristics via the
+``use_time_heuristic`` flag, removing the need for a separate a_star_time_alt
+module.
+"""
 
 from algorithms.a_star import a_star
-from algorithms.landmark_heuristic import alt_heuristic
+from algorithms.landmark_heuristic import alt_heuristic, time_alt_heuristic
 
 
 def a_star_alt(
@@ -16,11 +21,21 @@ def a_star_alt(
     avoid_edges=None,
     landmark_count=4,
     heuristic_weight=1.0,
+    use_time_heuristic=False,
 ):
-    """Run A* with ALT-based heuristic on distance routing tasks."""
+    """Run A* with an ALT landmark heuristic.
 
-    def _heuristic(g, node_id, goal_id):
-        return alt_heuristic(g, node_id, goal_id, landmark_count=landmark_count)
+    By default uses distance-based landmarks (admissible for cost_by_distance).
+    Set ``use_time_heuristic=True`` to use time-based landmarks built on
+    min-over-24h travel times, which are admissible for cost_by_time.
+    """
+
+    if use_time_heuristic:
+        def _heuristic(g, node_id, goal_id):
+            return time_alt_heuristic(g, node_id, goal_id, landmark_count=landmark_count)
+    else:
+        def _heuristic(g, node_id, goal_id):
+            return alt_heuristic(g, node_id, goal_id, landmark_count=landmark_count)
 
     return a_star(
         graph,
