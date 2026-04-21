@@ -14,7 +14,6 @@ from algorithms.dijkstra import dijkstra
 from algorithms.bidirectional_dijkstra import bidirectional_dijkstra
 from algorithms.a_star import a_star, time_euclidean_heuristic
 from algorithms.a_star_alt import a_star_alt
-from algorithms.a_star_time_alt import a_star_time_alt
 from algorithms.landmark_heuristic import precompute_alt_landmarks, precompute_time_alt_landmarks
 from algorithms.weighted_a_star import weighted_a_star
 from algorithms.bidirectional_a_star import bidirectional_a_star
@@ -45,23 +44,13 @@ ALGORITHM_REGISTRY = {
     "a_star_alt": {
         "fn": a_star_alt,
         # Distance queries: ALT landmarks on edge.distance (km).
-        # Time queries: redirected to a_star_time_alt with time-based ALT
-        # landmarks — admissible lower bound on travel time.
-        "cost_types": ("distance",),
+        # Time queries: ALT landmarks on min(time_list) — admissible for time.
+        "cost_types": ("distance", "time"),
         "kwargs": {"landmark_count": 4},
-        "warmup": lambda graph, kwargs: precompute_alt_landmarks(
-            graph,
-            landmark_count=kwargs.get("landmark_count", 4),
-        ),
-    },
-    "a_star_time_alt": {
-        "fn": a_star_time_alt,
-        # Time-based ALT: landmarks on min(time_list) — admissible for time.
-        "cost_types": ("time",),
-        "kwargs": {"landmark_count": 4},
-        "warmup": lambda graph, kwargs: precompute_time_alt_landmarks(
-            graph,
-            landmark_count=kwargs.get("landmark_count", 4),
+        "time_kwargs": {"landmark_count": 4, "use_time_heuristic": True},
+        "warmup": lambda graph, kwargs: (
+            precompute_alt_landmarks(graph, landmark_count=kwargs.get("landmark_count", 4)),
+            precompute_time_alt_landmarks(graph, landmark_count=kwargs.get("landmark_count", 4)),
         ),
     },
     "weighted_a_star": {
