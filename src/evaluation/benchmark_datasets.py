@@ -13,10 +13,16 @@ if str(SRC) not in sys.path:
 from algorithms.dijkstra import dijkstra
 from algorithms.bidirectional_dijkstra import bidirectional_dijkstra
 from algorithms.a_star import a_star, time_euclidean_heuristic
-from algorithms.a_star_alt import a_star_alt
-from algorithms.landmark_heuristic import precompute_alt_landmarks, precompute_time_alt_landmarks
+from algorithms.a_star_alt import a_star_alt, a_star_active_alt, a_star_departure_alt
+from algorithms.landmark_heuristic import (
+    precompute_alt_landmarks,
+    precompute_time_alt_landmarks,
+    precompute_departure_alt_landmarks,
+)
 from algorithms.weighted_a_star import weighted_a_star
 from algorithms.bidirectional_a_star import bidirectional_a_star
+from algorithms.bidirectional_time_a_star import bidirectional_time_a_star, precompute_bwd_min_time
+from algorithms.degree2_contraction import dijkstra_contracted, a_star_contracted, precontract_graph
 from cost.distance_cost import cost_by_distance
 from cost.time_cost import cost_by_time
 from dataio.graph_io import import_graph_csv
@@ -66,6 +72,48 @@ ALGORITHM_REGISTRY = {
         "fn": bidirectional_a_star,
         # Backward search cannot evaluate time-dependent costs; skipped for time.
         "cost_types": ("distance",),
+    },
+    # ── New time-optimised algorithms ────────────────────────────────────────
+    "a_star_active_alt": {
+        "fn": a_star_active_alt,
+        # Active landmark selection: 16 landmarks precomputed, best 4 chosen
+        # per (start, goal) pair at query time.  Time-only.
+        "cost_types": ("time",),
+        "time_kwargs": {"landmark_count": 16, "active_count": 4},
+        "warmup": lambda graph, kwargs: precompute_time_alt_landmarks(
+            graph, landmark_count=kwargs.get("landmark_count", 16)
+        ),
+    },
+    "a_star_departure_alt": {
+        "fn": a_star_departure_alt,
+        # Departure-aware ALT: uses min(time_list[departure_hour:]) instead of
+        # global min, giving a tighter admissible lower bound.  Time-only.
+        "cost_types": ("time",),
+        "time_kwargs": {"landmark_count": 4, "departure_hour": 8},
+        "warmup": lambda graph, kwargs: precompute_departure_alt_landmarks(
+            graph,
+            departure_hour=kwargs.get("departure_hour", 8),
+            landmark_count=kwargs.get("landmark_count", 4),
+        ),
+    },
+    "dijkstra_contracted": {
+        "fn": dijkstra_contracted,
+        # Degree-2 node contraction: removes pass-through nodes from the graph
+        # before running Dijkstra.  Distance and time both benefit.
+        "cost_types": ("time",),
+        "warmup": lambda graph, kwargs: precontract_graph(graph),
+    },
+    "a_star_contracted": {
+        "fn": a_star_contracted,
+        # A* with time-Euclidean heuristic on the contracted graph.  Time-only.
+        "cost_types": ("time",),
+        "warmup": lambda graph, kwargs: precontract_graph(graph),
+    },
+    "bidirectional_time_a_star": {
+        "fn": bidirectional_time_a_star,
+        # Static-lower-bound bidirectional A*: backward min-time Dijkstra from
+        # goal provides a tight admissible heuristic for the forward search.
+        "cost_types": ("time",),
     },
 }
 
@@ -181,8 +229,10 @@ def run_dataset_benchmarks(
             algo_time_kwargs = algo_meta.get("time_kwargs", algo_kwargs)
             warmup_fn = algo_meta.get("warmup")
 
+            # For time-only algorithms, the relevant kwargs are time_kwargs.
+            warmup_kwargs = algo_meta.get("time_kwargs", algo_kwargs) if "time" in supported_cost_types and "distance" not in supported_cost_types else algo_kwargs
             if warmup_fn is not None:
-                warmup_fn(graph, algo_kwargs)
+                warmup_fn(graph, warmup_kwargs)
 
             batches = []
 
