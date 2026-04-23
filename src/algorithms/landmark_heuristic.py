@@ -219,6 +219,189 @@ def time_alt_heuristic(graph, node_id, goal_id, landmark_count=4):
     return max(0.0, lower_bound)
 
 
+# ---------------------------------------------------------------------------
+# Active landmark selection: precompute more landmarks, pick best per query.
+# ---------------------------------------------------------------------------
+
+def _select_active_time_landmarks(cache, start_id, goal_id, active_count):
+    """Select up to active_count landmarks that give the tightest bounds for
+    the (start, goal) pair.  Uses the ALT paper heuristic: score each landmark
+    by the maximum triangle-inequality bound it can produce between start and
+    goal, then return the top-scoring ones.
+    """
+    scored = []
+    for landmark in cache["landmarks"]:
+        from_l = cache["dist_from"][landmark]
+        to_l   = cache["dist_to"][landmark]
+
+        score = 0.0
+        l_to_goal  = from_l.get(goal_id,  0.0)
+        l_to_start = from_l.get(start_id, 0.0)
+        score = max(score, l_to_goal - l_to_start)
+
+        start_to_l = to_l.get(start_id, 0.0)
+        goal_to_l  = to_l.get(goal_id,  0.0)
+        score = max(score, start_to_l - goal_to_l)
+
+        scored.append((score, landmark))
+
+    scored.sort(reverse=True)
+    return [lm for _, lm in scored[:active_count]]
+
+
+def make_active_time_alt_heuristic(graph, start_id, goal_id,
+                                    landmark_count=16, active_count=4):
+    """Return a heuristic closure with landmarks pre-selected for (start, goal).
+
+    Precomputes ``landmark_count`` landmarks (if not already cached) but only
+    uses the best ``active_count`` of them during the actual A* expansion.
+    This amortises landmark preprocessing across queries while keeping per-node
+    heuristic evaluation cheap.
+    """
+    cache = _ensure_time_alt_cache(graph, landmark_count=landmark_count)
+    active = _select_active_time_landmarks(cache, start_id, goal_id, active_count)
+
+    def _heuristic(g, node_id, goal_id_inner):
+        if node_id == goal_id_inner:
+            return 0.0
+        lower_bound = 0.0
+        for landmark in active:
+            from_l = cache["dist_from"][landmark]
+            to_l   = cache["dist_to"][landmark]
+
+            l_to_goal = from_l.get(goal_id_inner)
+            l_to_node = from_l.get(node_id)
+            if l_to_goal is not None and l_to_node is not None:
+                lower_bound = max(lower_bound, l_to_goal - l_to_node)
+
+            node_to_l = to_l.get(node_id)
+            goal_to_l = to_l.get(goal_id_inner)
+            if node_to_l is not None and goal_to_l is not None:
+                lower_bound = max(lower_bound, node_to_l - goal_to_l)
+
+        return max(0.0, lower_bound)
+
+    return _heuristic
+
+
+# ---------------------------------------------------------------------------
+# Departure-aware ALT: tighter lower bounds by using min times from
+# departure_hour onwards instead of the global 24-hour minimum.
+# ---------------------------------------------------------------------------
+
+def _single_source_departure_time_distances(graph, source, departure_hour,
+                                             use_reverse=False):
+    """Dijkstra using min(time_list[departure_hour:]) as edge cost.
+
+    This is always admissible for queries whose departure time is
+    >= departure_hour because the actual traversal cost at any hour
+    >= departure_hour cannot be lower than this minimum.
+    """
+    if source not in graph.adj:
+        return {}
+
+    distances = {source: 0.0}
+    settled = set()
+    pq = MinHeap()
+    pq.push((0.0, source))
+
+    while not pq.is_empty():
+        current_cost, node = pq.pop()
+        if node in settled:
+            continue
+        settled.add(node)
+
+        if use_reverse:
+            for predecessor, edge in graph.reverse_neighbors(node):
+                edge_cost = min(edge.time_list[departure_hour:]) if departure_hour < 24 else min(edge.time_list)
+                new_cost = current_cost + edge_cost
+                if new_cost < distances.get(predecessor, float("inf")):
+                    distances[predecessor] = new_cost
+                    pq.push((new_cost, predecessor))
+        else:
+            for edge in graph.neighbors(node):
+                edge_cost = min(edge.time_list[departure_hour:]) if departure_hour < 24 else min(edge.time_list)
+                new_cost = current_cost + edge_cost
+                if new_cost < distances.get(edge.destination, float("inf")):
+                    distances[edge.destination] = new_cost
+                    pq.push((new_cost, edge.destination))
+
+    return distances
+
+
+def _ensure_departure_alt_cache(graph, departure_hour=8, landmark_count=4):
+    """Build and cache departure-aware landmark distance tables."""
+    requested_count = max(1, int(landmark_count))
+    dep_hour = int(departure_hour) % 24
+
+    cache_attr = "_departure_alt_caches"
+    all_caches = getattr(graph, cache_attr, {})
+
+    key = (dep_hour, requested_count)
+    if key in all_caches:
+        return all_caches[key]
+
+    landmarks = _select_landmarks(graph, requested_count)
+    dist_from = {}
+    dist_to = {}
+    for landmark in landmarks:
+        dist_from[landmark] = _single_source_departure_time_distances(
+            graph, landmark, dep_hour, use_reverse=False
+        )
+        dist_to[landmark] = _single_source_departure_time_distances(
+            graph, landmark, dep_hour, use_reverse=True
+        )
+
+    cache = {
+        "landmark_count": requested_count,
+        "departure_hour": dep_hour,
+        "landmarks": tuple(landmarks),
+        "dist_from": dist_from,
+        "dist_to": dist_to,
+    }
+    all_caches[key] = cache
+    setattr(graph, cache_attr, all_caches)
+    return cache
+
+
+def precompute_departure_alt_landmarks(graph, departure_hour=8, landmark_count=4):
+    """Force-build departure-aware ALT landmark cache before query-time measurement."""
+    _ensure_departure_alt_cache(graph, departure_hour=departure_hour,
+                                 landmark_count=landmark_count)
+
+
+def departure_time_alt_heuristic(graph, node_id, goal_id,
+                                  departure_hour=8, landmark_count=4):
+    """Admissible ALT lower-bound tightened for a known departure hour.
+
+    Uses min travel time over hours [departure_hour..23] instead of the
+    global 24-hour minimum.  The bound is admissible because edges traversed
+    during the forward search will be at times >= departure_hour.
+    """
+    if node_id == goal_id:
+        return 0.0
+
+    cache = _ensure_departure_alt_cache(graph, departure_hour=departure_hour,
+                                         landmark_count=landmark_count)
+    lower_bound = 0.0
+
+    for landmark in cache["landmarks"]:
+        from_l = cache["dist_from"][landmark]
+        to_l   = cache["dist_to"][landmark]
+
+        l_to_goal = from_l.get(goal_id)
+        l_to_node = from_l.get(node_id)
+        if l_to_goal is not None and l_to_node is not None:
+            lower_bound = max(lower_bound, l_to_goal - l_to_node)
+
+        node_to_l = to_l.get(node_id)
+        goal_to_l = to_l.get(goal_id)
+        if node_to_l is not None and goal_to_l is not None:
+            lower_bound = max(lower_bound, node_to_l - goal_to_l)
+
+    return max(0.0, lower_bound)
+
+
 def alt_heuristic(graph, node_id, goal_id, landmark_count=4):
     """Return ALT lower-bound estimate for directed graphs.
 
