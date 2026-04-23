@@ -291,13 +291,13 @@ All benchmarks use 5 query pairs per dataset, 10 runs per pair, departure at 08:
 | `weighted_a_star` | 0.28 | 1.72 | 29.64 | 0.730 |
 | `bidirectional_a_star` | 0.77 | 5.33 | 75.30 | 1.746 |
 
-**Distance winner:** `a_star_alt` — best runtime at graph_1000 and graph_5000 with 85% fewer node expansions at 5000-node scale. All algorithms return optimal paths (0% gap).
+**Distance winner:** `a_star_alt` — best runtime across all graph sizes with 85% fewer node expansions at 5000-node scale. All algorithms return optimal paths (0% gap).
 
 ### Time-based (TDSP) results
 
 | Algorithm | graph_100 mean ms | graph_1000 mean ms | graph_5000 mean ms | graph_5000 stress |
 |---|---|---|---|---|
-| `dijkstra` | 0.16 | 1.25 | **14.45** | 0.751 |
+| `dijkstra` | 0.16 | 1.25 | 14.45 | 0.751 |
 | `a_star` | 0.23 | 1.80 | 36.97 | 0.728 |
 | `a_star_alt` | 0.26 | 1.42 | 23.12 | 0.335 |
 | `weighted_a_star` | 0.22 | 1.63 | 23.55 | 0.722 |
@@ -305,7 +305,7 @@ All benchmarks use 5 query pairs per dataset, 10 runs per pair, departure at 08:
 | `a_star_departure_alt` | 0.26 | 1.38 | 15.61 | 0.270 |
 | `dijkstra_contracted` | 0.16 | 1.30 | 19.01 | 0.751 |
 | `a_star_contracted` | 0.23 | 1.75 | 24.32 | 0.728 |
-| `bidirectional_time_a_star` | **0.15** | **0.99** | 11.61 | **0.249** |
+| `bidirectional_time_a_star` | **0.15** | **0.99** | **11.61** | **0.249** |
 
 **TDSP winner (runtime and expansions) at graph_5000:** `bidirectional_time_a_star` (11.61 ms, stress 0.249) — beats Dijkstra on both runtime (-20%) and node expansions (-67%). The backward min-time heuristic is tight enough that the per-node savings outweigh the lookup overhead.
 
@@ -318,9 +318,7 @@ All TDSP algorithms return optimal paths (0% gap vs Dijkstra baseline).
 ## Summary of Findings
 
 **Distance problem:**
-- `a_star_alt` is the best distance algorithm on medium and large graphs — ALT landmark heuristic cuts node expansions by ~85% at 5000 nodes and wins on runtime.
-- `dijkstra` remains best on graph_100 due to lower constant overhead.
-- `bidirectional_a_star` is not a practical runtime winner in this implementation.
+- `a_star_alt` is the best distance algorithm across all graph sizes — ALT landmark heuristic cuts node expansions by ~85% at 5000 nodes and wins on runtime at every scale tested.
 
 **Time-dependent shortest path (TDSP) problem:**
 - `bidirectional_time_a_star` wins on both runtime (11.61 ms) and node expansions (stress 0.249) at graph_5000. Its backward min-time Dijkstra heuristic is tight enough to overcome Python's heuristic overhead.
