@@ -5,6 +5,8 @@ plug into CLI/benchmark code with minimal changes.
 """
 
 from utils.min_heap import MinHeap
+from cost.time_cost import cost_by_time as _cost_by_time
+from cost.distance_cost import cost_by_distance as _cost_by_distance
 
 
 def _default_heuristic(graph, node_id, goal_id):
@@ -82,6 +84,8 @@ def a_star(
     visited = set()
     visited_order = []
     expanded_nodes = 0
+    _inline_time = cost_func is _cost_by_time
+    _inline_dist = cost_func is _cost_by_distance
 
     # (f_score, g_score, current_time, node_id)
     open_heap = MinHeap()
@@ -110,7 +114,12 @@ def a_star(
             if neighbor in visited:
                 continue
 
-            edge_cost = cost_func(edge, current_time)
+            if _inline_time:
+                edge_cost = edge.time_list[int(current_time // 60) % 24]
+            elif _inline_dist:
+                edge_cost = edge.distance
+            else:
+                edge_cost = cost_func(edge, current_time)
             if edge_cost < 0:
                 raise ValueError("A* requires non-negative edge costs")
 
