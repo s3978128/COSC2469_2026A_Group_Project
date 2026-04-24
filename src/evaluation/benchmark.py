@@ -5,6 +5,12 @@ import numbers
 import statistics
 import time
 
+try:
+    from evaluation.metrics import path_total_distance, path_total_travel_time
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
+
 
 def benchmark_dijkstra(
     graph,
@@ -98,6 +104,7 @@ def benchmark_dijkstra(
                 if stats:
                     run_stats.append(stats)
 
+        path_for_metrics = final_path or []
         row = {
             "start": start,
             "goal": goal,
@@ -108,6 +115,12 @@ def benchmark_dijkstra(
             "runtime_ms_mean": statistics.mean(run_times_ms),
             "runtime_ms_max": max(run_times_ms),
         }
+
+        if _METRICS_AVAILABLE:
+            row["path_total_distance"] = path_total_distance(graph, path_for_metrics)
+            row["path_total_travel_time"] = path_total_travel_time(
+                graph, path_for_metrics, start_time=start_time
+            )
 
         if run_stats:
             numeric_keys = sorted(
@@ -140,6 +153,8 @@ def write_runtime_csv(rows, output_path):
         "runs",
         "path_found",
         "total_cost",
+        "path_total_distance",
+        "path_total_travel_time",
         "runtime_ms_min",
         "runtime_ms_mean",
         "runtime_ms_max",
