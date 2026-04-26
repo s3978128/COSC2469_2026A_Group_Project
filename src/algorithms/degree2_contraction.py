@@ -156,6 +156,13 @@ def dijkstra_contracted(graph, start, goal, cost_func,
                          avoid_nodes=None,
                          avoid_edges=None):
     """Dijkstra on the degree-2 contracted graph."""
+    if avoid_nodes or avoid_edges:
+        return dijkstra(graph, start, goal, cost_func,
+                        start_time=start_time,
+                        return_visited=return_visited,
+                        return_stats=return_stats,
+                        avoid_nodes=avoid_nodes,
+                        avoid_edges=avoid_edges)
     g = _resolve_graph(graph, start, goal)
     return dijkstra(g, start, goal, cost_func,
                     start_time=start_time,
@@ -175,6 +182,15 @@ def a_star_contracted(graph, start, goal, cost_func,
                        heuristic_weight=1.0):
     """A* with the time-Euclidean heuristic on the contracted graph."""
     from algorithms.a_star import time_euclidean_heuristic
+    if avoid_nodes or avoid_edges:
+        return a_star(graph, start, goal, cost_func,
+                      start_time=start_time,
+                      return_visited=return_visited,
+                      return_stats=return_stats,
+                      avoid_nodes=avoid_nodes,
+                      avoid_edges=avoid_edges,
+                      heuristic_fn=heuristic_fn or time_euclidean_heuristic,
+                      heuristic_weight=heuristic_weight)
     g = _resolve_graph(graph, start, goal)
     h = heuristic_fn or time_euclidean_heuristic
     return a_star(g, start, goal, cost_func,

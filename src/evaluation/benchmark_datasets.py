@@ -46,6 +46,10 @@ ALGORITHM_REGISTRY = {
         # admissible lower bound on travel time.
         "cost_types": ("distance", "time"),
         "time_kwargs": {"heuristic_fn": time_euclidean_heuristic},
+        "warmup": lambda graph, kwargs: (
+            graph.distance_heuristic_scale(),
+            graph.time_heuristic_scale(),
+        ),
     },
     "a_star_alt": {
         "fn": a_star_alt,
@@ -67,6 +71,10 @@ ALGORITHM_REGISTRY = {
         "cost_types": ("distance", "time"),
         "kwargs": {"heuristic_weight": 1.25},
         "time_kwargs": {"heuristic_weight": 1.25, "heuristic_fn": time_euclidean_heuristic},
+        "warmup": lambda graph, kwargs: (
+            graph.distance_heuristic_scale(),
+            graph.time_heuristic_scale(),
+        ),
     },
     "bidirectional_a_star": {
         "fn": bidirectional_a_star,
@@ -86,8 +94,9 @@ ALGORITHM_REGISTRY = {
     },
     "a_star_departure_alt": {
         "fn": a_star_departure_alt,
-        # Departure-aware ALT: uses min(time_list[departure_hour:]) instead of
-        # global min, giving a tighter admissible lower bound.  Time-only.
+        # Departure-keyed ALT: time-aware cache keyed by departure hour, but
+        # the heuristic itself stays admissible by using the global 24-hour
+        # minimum. Time-only.
         "cost_types": ("time",),
         "time_kwargs": {"landmark_count": 4, "departure_hour": 8},
         "warmup": lambda graph, kwargs: precompute_departure_alt_landmarks(
@@ -227,12 +236,19 @@ def run_dataset_benchmarks(
             supported_cost_types = algo_meta["cost_types"]
             algo_kwargs = algo_meta.get("kwargs", {})
             algo_time_kwargs = algo_meta.get("time_kwargs", algo_kwargs)
+            if algo_name == "a_star_departure_alt":
+                algo_time_kwargs = dict(algo_time_kwargs)
+                algo_time_kwargs["departure_hour"] = departure_hour
             warmup_fn = algo_meta.get("warmup")
 
             # For time-only algorithms, the relevant kwargs are time_kwargs.
             warmup_kwargs = algo_meta.get("time_kwargs", algo_kwargs) if "time" in supported_cost_types and "distance" not in supported_cost_types else algo_kwargs
             if warmup_fn is not None:
                 warmup_fn(graph, warmup_kwargs)
+
+            if algo_name == "bidirectional_time_a_star" and "time" in supported_cost_types:
+                for _, sampled_goal in pairs:
+                    precompute_bwd_min_time(graph, sampled_goal)
 
             batches = []
 

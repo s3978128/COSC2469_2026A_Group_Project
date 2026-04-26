@@ -285,17 +285,18 @@ def make_active_time_alt_heuristic(graph, start_id, goal_id,
 
 
 # ---------------------------------------------------------------------------
-# Departure-aware ALT: tighter lower bounds by using min times from
-# departure_hour onwards instead of the global 24-hour minimum.
+# Departure-aware ALT: queried with a departure hour, but the bound must
+# remain admissible even when paths cross midnight.  We therefore use the
+# global 24-hour minimum for correctness.
 # ---------------------------------------------------------------------------
 
 def _single_source_departure_time_distances(graph, source, departure_hour,
                                              use_reverse=False):
-    """Dijkstra using min(time_list[departure_hour:]) as edge cost.
+    """Dijkstra using the global minimum travel time as edge cost.
 
-    This is always admissible for queries whose departure time is
-    >= departure_hour because the actual traversal cost at any hour
-    >= departure_hour cannot be lower than this minimum.
+    The departure_hour parameter is retained for API compatibility, but the
+    safe admissible lower bound for a periodic time-dependent graph is the
+    minimum over all 24 hours.
     """
     if source not in graph.adj:
         return {}
@@ -313,14 +314,14 @@ def _single_source_departure_time_distances(graph, source, departure_hour,
 
         if use_reverse:
             for predecessor, edge in graph.reverse_neighbors(node):
-                edge_cost = min(edge.time_list[departure_hour:]) if departure_hour < 24 else min(edge.time_list)
+                edge_cost = min(edge.time_list)
                 new_cost = current_cost + edge_cost
                 if new_cost < distances.get(predecessor, float("inf")):
                     distances[predecessor] = new_cost
                     pq.push((new_cost, predecessor))
         else:
             for edge in graph.neighbors(node):
-                edge_cost = min(edge.time_list[departure_hour:]) if departure_hour < 24 else min(edge.time_list)
+                edge_cost = min(edge.time_list)
                 new_cost = current_cost + edge_cost
                 if new_cost < distances.get(edge.destination, float("inf")):
                     distances[edge.destination] = new_cost
@@ -372,11 +373,10 @@ def precompute_departure_alt_landmarks(graph, departure_hour=8, landmark_count=4
 
 def departure_time_alt_heuristic(graph, node_id, goal_id,
                                   departure_hour=8, landmark_count=4):
-    """Admissible ALT lower-bound tightened for a known departure hour.
+    """Admissible ALT lower-bound for time-dependent routing.
 
-    Uses min travel time over hours [departure_hour..23] instead of the
-    global 24-hour minimum.  The bound is admissible because edges traversed
-    during the forward search will be at times >= departure_hour.
+    The departure_hour parameter is kept for API compatibility, but the bound
+    uses the global 24-hour minimum so it remains admissible across midnight.
     """
     if node_id == goal_id:
         return 0.0
