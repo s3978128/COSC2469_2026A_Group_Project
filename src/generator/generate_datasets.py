@@ -21,7 +21,7 @@ DATASET_SPECS = [
 ]
 
 
-def generate_and_export_datasets(base_dir=ROOT / "data" / "datasets", seed=42, max_nodes=10000):
+def generate_and_export_datasets(base_dir=ROOT / "data" / "datasets" / "default", seed=42, max_nodes=10000):
     """Generate configured datasets and export each as CSV+JSON."""
     base_path = Path(base_dir)
     base_path.mkdir(parents=True, exist_ok=True)
@@ -69,8 +69,8 @@ def main():
     parser.add_argument(
         "--base-dir",
         type=Path,
-        default=ROOT / "data" / "datasets",
-        help="Output base directory",
+        default=ROOT / "data" / "datasets" / "default",
+        help="Output base directory for the default benchmark suite",
     )
     args = parser.parse_args()
 

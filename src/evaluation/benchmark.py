@@ -1,8 +1,15 @@
 """Simple benchmarking helpers for shortest-path experiments."""
 
 import csv
+import numbers
 import statistics
 import time
+
+try:
+    from evaluation.metrics import path_total_distance, path_total_travel_time
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
 
 
 def benchmark_dijkstra(
@@ -12,6 +19,8 @@ def benchmark_dijkstra(
     cost_func,
     start_time=0,
     runs_per_pair=5,
+    algorithm_kwargs=None,
+    collect_stats=True,
 ):
     """Benchmark Dijkstra runtime for multiple start/goal pairs.
 
@@ -23,21 +32,62 @@ def benchmark_dijkstra(
     if runs_per_pair < 1:
         raise ValueError("runs_per_pair must be at least 1")
 
+    algorithm_kwargs = dict(algorithm_kwargs or {})
+
+    def _extract_stats(result_tuple):
+        """Extract optional stats dict from algorithm return tuple."""
+        if not isinstance(result_tuple, tuple) or len(result_tuple) < 3:
+            return {}
+
+        # Common shapes:
+        # (path, cost, stats)
+        # (path, cost, visited)
+        # (path, cost, visited, stats)
+        if len(result_tuple) >= 4 and isinstance(result_tuple[3], dict):
+            return result_tuple[3]
+        if len(result_tuple) >= 3 and isinstance(result_tuple[2], dict):
+            return result_tuple[2]
+        return {}
+
     results = []
     for start, goal in node_pairs:
         run_times_ms = []
         final_cost = None
         final_path = None
+        run_stats = []
 
         for _ in range(runs_per_pair):
             t0 = time.perf_counter()
-            result = dijkstra_fn(
-                graph,
-                start,
-                goal,
-                cost_func,
-                start_time=start_time,
-            )
+            try:
+                if collect_stats:
+                    result = dijkstra_fn(
+                        graph,
+                        start,
+                        goal,
+                        cost_func,
+                        start_time=start_time,
+                        return_stats=True,
+                        **algorithm_kwargs,
+                    )
+                else:
+                    result = dijkstra_fn(
+                        graph,
+                        start,
+                        goal,
+                        cost_func,
+                        start_time=start_time,
+                        **algorithm_kwargs,
+                    )
+            except TypeError:
+                # Backward compatibility for algorithms without return_stats.
+                result = dijkstra_fn(
+                    graph,
+                    start,
+                    goal,
+                    cost_func,
+                    start_time=start_time,
+                    **algorithm_kwargs,
+                )
 
             if not isinstance(result, tuple) or len(result) < 2:
                 raise ValueError(
@@ -49,19 +99,48 @@ def benchmark_dijkstra(
             run_times_ms.append(elapsed_ms)
             final_path = path
             final_cost = cost
+            if collect_stats:
+                stats = _extract_stats(result)
+                if stats:
+                    run_stats.append(stats)
 
-        results.append(
-            {
-                "start": start,
-                "goal": goal,
-                "runs": runs_per_pair,
-                "path_found": bool(final_path),
-                "total_cost": float(final_cost),
-                "runtime_ms_min": min(run_times_ms),
-                "runtime_ms_mean": statistics.mean(run_times_ms),
-                "runtime_ms_max": max(run_times_ms),
-            }
-        )
+        path_for_metrics = final_path or []
+        row = {
+            "start": start,
+            "goal": goal,
+            "runs": runs_per_pair,
+            "path_found": bool(final_path),
+            "total_cost": float(final_cost),
+            "runtime_ms_min": min(run_times_ms),
+            "runtime_ms_mean": statistics.mean(run_times_ms),
+            "runtime_ms_max": max(run_times_ms),
+        }
+
+        if _METRICS_AVAILABLE:
+            row["path_total_distance"] = path_total_distance(graph, path_for_metrics)
+            row["path_total_travel_time"] = path_total_travel_time(
+                graph, path_for_metrics, start_time=start_time
+            )
+
+        if run_stats:
+            numeric_keys = sorted(
+                {
+                    key
+                    for stats in run_stats
+                    for key, value in stats.items()
+                    if isinstance(value, numbers.Number)
+                    and not isinstance(value, bool)
+                }
+            )
+            for key in numeric_keys:
+                values = [stats[key] for stats in run_stats if key in stats]
+                if not values:
+                    continue
+                row[f"{key}_min"] = min(values)
+                row[f"{key}_mean"] = statistics.mean(values)
+                row[f"{key}_max"] = max(values)
+
+        results.append(row)
 
     return results
 
@@ -74,6 +153,8 @@ def write_runtime_csv(rows, output_path):
         "runs",
         "path_found",
         "total_cost",
+        "path_total_distance",
+        "path_total_travel_time",
         "runtime_ms_min",
         "runtime_ms_mean",
         "runtime_ms_max",

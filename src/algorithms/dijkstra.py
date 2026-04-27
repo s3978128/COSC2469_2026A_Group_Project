@@ -1,6 +1,8 @@
 """Generic Dijkstra shortest-path algorithm for adjacency-list graphs."""
 
 from utils.min_heap import MinHeap
+from cost.time_cost import cost_by_time as _cost_by_time
+from cost.distance_cost import cost_by_distance as _cost_by_distance
 
 
 def dijkstra(
@@ -10,6 +12,7 @@ def dijkstra(
     cost_func,
     start_time=0,
     return_visited=False,
+    return_stats=False,
     avoid_nodes=None,
     avoid_edges=None,
 ):
@@ -28,6 +31,9 @@ def dijkstra(
     return_visited : bool
         When True, also return the list of visited nodes in expansion order.
 
+    return_stats : bool
+        When True, include a stats dictionary containing explainability metrics.
+
     avoid_nodes : iterable[str] | None
         Optional set/list of node ids that must not appear in the route.
 
@@ -36,7 +42,8 @@ def dijkstra(
 
     Returns
     -------
-    (path, total_cost) or (path, total_cost, visited_order)
+    (path, total_cost), (path, total_cost, visited_order),
+    (path, total_cost, stats), or (path, total_cost, visited_order, stats)
         *path* is a list of node ids from *start* to *goal*.
         *total_cost* is the accumulated cost along that path.
         If *goal* is unreachable, returns ``([], float('inf'))``.
@@ -54,6 +61,9 @@ def dijkstra(
     previous = {start: None}
     visited = set()
     visited_order = []
+    expanded_nodes = 0
+    _inline_time = cost_func is _cost_by_time
+    _inline_dist = cost_func is _cost_by_distance
 
     pq = MinHeap()
     pq.push((0.0, start_time, start))
@@ -65,6 +75,7 @@ def dijkstra(
             continue
         visited.add(node)
         visited_order.append(node)
+        expanded_nodes += 1
 
         if node == goal:
             break
@@ -78,7 +89,12 @@ def dijkstra(
             if neighbor in visited:
                 continue
 
-            edge_cost = cost_func(edge, current_time)
+            if _inline_time:
+                edge_cost = edge.time_list[int(current_time // 60) % 24]
+            elif _inline_dist:
+                edge_cost = edge.distance
+            else:
+                edge_cost = cost_func(edge, current_time)
             if edge_cost < 0:
                 raise ValueError("Dijkstra requires non-negative edge costs")
 
@@ -91,9 +107,17 @@ def dijkstra(
                 pq.push((new_cost, new_time, neighbor))
 
     # Path reconstruction
+    stats = {
+        "expanded_nodes": expanded_nodes,
+    }
+
     if goal not in best_cost:
+        if return_visited and return_stats:
+            return [], float('inf'), visited_order, stats
         if return_visited:
             return [], float('inf'), visited_order
+        if return_stats:
+            return [], float('inf'), stats
         return [], float('inf')
 
     path = []
@@ -103,7 +127,11 @@ def dijkstra(
         current = previous[current]
     path.reverse()
 
+    if return_visited and return_stats:
+        return path, best_cost[goal], visited_order, stats
     if return_visited:
         return path, best_cost[goal], visited_order
+    if return_stats:
+        return path, best_cost[goal], stats
 
     return path, best_cost[goal]

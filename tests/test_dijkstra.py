@@ -106,5 +106,18 @@ class TestDijkstra(unittest.TestCase):
         self.assertEqual(visited[0], "A")
         self.assertIn("F", visited)
 
+    def test_return_stats_reports_expanded_nodes(self):
+        path, distance, stats = dijkstra(
+            self.graph,
+            "A",
+            "F",
+            cost_by_distance,
+            return_stats=True,
+        )
+        self.assertEqual(path, ["A", "C", "D", "F"])
+        self.assertAlmostEqual(distance, 12.5)
+        self.assertIn("expanded_nodes", stats)
+        self.assertGreater(stats["expanded_nodes"], 0)
+
 if __name__ == "__main__":
     unittest.main()
