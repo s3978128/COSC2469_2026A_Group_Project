@@ -1,0 +1,26 @@
+Dataset: graph_100
+  Nodes: 100
+  Edges: 296
+  Edge/Node ratio: 2.96
+  dijkstra: mean=0.1724 ms, max=0.2596 ms
+    expanded_nodes: mean=78.60, max=94.00
+  bidirectional_dijkstra: mean=0.1072 ms, max=0.2096 ms
+    expanded_nodes: mean=60.40, max=68.00
+
+Dataset: graph_1000
+  Nodes: 1000
+  Edges: 3466
+  Edge/Node ratio: 3.47
+  dijkstra: mean=1.3493 ms, max=3.3281 ms
+    expanded_nodes: mean=419.70, max=878.00
+  bidirectional_dijkstra: mean=0.6084 ms, max=1.4416 ms
+    expanded_nodes: mean=285.20, max=625.00
+
+Dataset: graph_5000
+  Nodes: 5000
+  Edges: 17294
+  Edge/Node ratio: 3.46
+  dijkstra: mean=17.3932 ms, max=30.6024 ms
+    expanded_nodes: mean=3748.60, max=4889.00
+  bidirectional_dijkstra: mean=11.9796 ms, max=27.5846 ms
+    expanded_nodes: mean=3517.80, max=4449.00
