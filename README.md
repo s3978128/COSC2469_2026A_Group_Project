@@ -1,4 +1,4 @@
-# Smart Path Finder
+# Smart Path Finder Program
 
 Smart Path Finder is a Python routing project over directed road graphs where:
 
