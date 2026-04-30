@@ -17,6 +17,7 @@ from generator.graph_generator import generate_realistic_graph
 DATASET_SPECS = [
     {"name": "graph_100", "rows": 10, "cols": 10, "scenario": "realistic"},
     {"name": "graph_1000", "rows": 25, "cols": 40, "scenario": "mixed"},
+    {"name": "graph_1000_stress", "rows": 25, "cols": 40, "scenario": "stress"},
     {"name": "graph_5000", "rows": 50, "cols": 100, "scenario": "mixed"},
 ]
 
