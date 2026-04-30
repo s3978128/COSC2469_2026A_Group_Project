@@ -125,6 +125,23 @@ def _print_graph(graph):
     print("─" * 70)
 
 
+def _prompt_compare_runs():
+    """Prompt for the number of repetitions used in a comparison run."""
+    compare_runs_text = input("Compare repetitions per algorithm (default 3): ").strip()
+    if not compare_runs_text:
+        return 3
+
+    compare_runs = int(compare_runs_text)
+    if compare_runs < 1:
+        raise ValueError("Compare repetitions must be >= 1.")
+    return compare_runs
+
+
+def _print_runtime_search_note():
+    print("Runtime = full algorithm execution time; search effort = expanded nodes.")
+    print("Preprocessing is warmed up before timing, so it is not counted in the table.")
+
+
 def _run_shortest_path_query(graph):
     print(f"\nAvailable nodes: {', '.join(sorted(graph.nodes()))}")
     start = input("Start node: ").strip()
@@ -133,23 +150,8 @@ def _run_shortest_path_query(graph):
         "Departure hour for travel-time estimate (0-23, default 8): "
     ).strip()
     algo_choice = input(
-        "Distance algorithm [dijkstra/a_star/a_star_alt/weighted_a_star/bidirectional_dijkstra/bidirectional_a_star/compare] (default dijkstra): "
+        "Distance algorithm [dijkstra/a_star/a_star_alt/weighted_a_star/bidirectional_dijkstra/bidirectional_a_star] (default dijkstra): "
     ).strip().lower() or "dijkstra"
-
-    compare_runs = 3
-    if algo_choice == "compare":
-        compare_runs_text = input(
-            "Compare repetitions per algorithm (default 3): "
-        ).strip()
-        if compare_runs_text:
-            try:
-                compare_runs = int(compare_runs_text)
-                if compare_runs < 1:
-                    print("Compare repetitions must be >= 1.")
-                    return
-            except ValueError:
-                print("Compare repetitions must be an integer.")
-                return
 
     try:
         avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
@@ -171,109 +173,21 @@ def _run_shortest_path_query(graph):
             "bidirectional_a_star": (bidirectional_a_star, {}),
         }
 
-        if algo_choice == "compare":
-            if hasattr(graph, "distance_heuristic_scale"):
-                graph.distance_heuristic_scale()
+        if algo_choice not in algorithm_map:
+            print(f"Unknown distance algorithm '{algo_choice}'.")
+            return
 
-            # Exclude one-time ALT setup from table timings for fairer per-query comparison.
-            precompute_alt_landmarks(graph, landmark_count=4)
-
-            print("\nDistance algorithm comparison:")
-            print(
-                f"(runs per algorithm: {compare_runs}, runtime measured without stats overhead)"
-            )
-            print("-" * 92)
-            print(
-                f"{'algorithm':24s} {'cost':>10s} {'exp':>8s} {'ms_mean':>10s} {'ms_max':>10s} {'path'}"
-            )
-            print("-" * 92)
-
-            comparison_rows = []
-            for algo_name, (algo_fn, algo_kwargs) in algorithm_map.items():
-                runtimes_ms = []
-                for _ in range(compare_runs):
-                    t0 = time.perf_counter()
-                    algo_fn(
-                        graph,
-                        start,
-                        goal,
-                        cost_by_distance,
-                        avoid_nodes=avoid_nodes,
-                        avoid_edges=avoid_edges,
-                        **algo_kwargs,
-                    )
-                    runtimes_ms.append((time.perf_counter() - t0) * 1000)
-
-                result = algo_fn(
-                    graph,
-                    start,
-                    goal,
-                    cost_by_distance,
-                    return_visited=True,
-                    return_stats=True,
-                    avoid_nodes=avoid_nodes,
-                    avoid_edges=avoid_edges,
-                    **algo_kwargs,
-                )
-
-                path = result[0]
-                distance = result[1]
-                visited = result[2] if len(result) >= 3 else []
-                stats = result[3] if len(result) >= 4 and isinstance(result[3], dict) else {}
-                expanded = int(stats.get("expanded_nodes", len(visited)))
-                runtime_mean = sum(runtimes_ms) / len(runtimes_ms)
-                runtime_max = max(runtimes_ms)
-
-                if path:
-                    path_preview = f"{path[0]}->{path[-1]} ({len(path)} nodes)"
-                else:
-                    path_preview = "unreachable"
-
-                print(
-                    f"{algo_name:24s} {distance:10.2f} {expanded:8d} {runtime_mean:10.3f} {runtime_max:10.3f} {path_preview}"
-                )
-                comparison_rows.append(
-                    (algo_name, path, distance, visited, expanded, runtime_mean, runtime_max)
-                )
-
-            print("-" * 92)
-
-            baseline = next((row[2] for row in comparison_rows if row[0] == "dijkstra"), None)
-            if baseline not in (None, float("inf"), 0):
-                print("Optimality gaps vs Dijkstra (%):")
-                for algo_name, _, distance, _, _, _, _ in comparison_rows:
-                    if distance == float("inf"):
-                        gap = float("inf")
-                    else:
-                        gap = ((distance - baseline) / baseline) * 100.0
-                    if gap == float("inf"):
-                        print(f"- {algo_name}: inf")
-                    else:
-                        print(f"- {algo_name}: {gap:.4f}%")
-
-            successful = [row for row in comparison_rows if row[1]]
-            if not successful:
-                print("No path found by any distance algorithm.")
-                return
-
-            successful.sort(key=lambda row: row[2])
-            _, path, distance, visited, _, _ = successful[0]
-        else:
-            if algo_choice not in algorithm_map:
-                print(f"Unknown distance algorithm '{algo_choice}'.")
-                return
-
-            algo_fn, algo_kwargs = algorithm_map[algo_choice]
-            path, distance, visited = algo_fn(
-                graph,
-                start,
-                goal,
-                cost_by_distance,
-                return_visited=True,
-                avoid_nodes=avoid_nodes,
-                avoid_edges=avoid_edges,
-                **algo_kwargs,
-            )
+        algo_fn, algo_kwargs = algorithm_map[algo_choice]
+        path, distance, visited = algo_fn(
+            graph,
+            start,
+            goal,
+            cost_by_distance,
+            return_visited=True,
+            avoid_nodes=avoid_nodes,
+            avoid_edges=avoid_edges,
+            **algo_kwargs,
+        )
 
         if not path:
             print("No path found.")
@@ -313,23 +227,8 @@ def _run_shortest_time_query(graph):
     goal = input("Goal node: ").strip()
     hour = input("Departure hour (0-23): ").strip()
     algo_choice = input(
-        "Time algorithm [dijkstra/a_star/a_star_alt/weighted_a_star/a_star_active_alt/a_star_departure_alt/dijkstra_contracted/a_star_contracted/bidirectional_time_a_star/compare] (default dijkstra): "
+        "Time algorithm [dijkstra/a_star/a_star_alt/weighted_a_star/a_star_active_alt/a_star_departure_alt/dijkstra_contracted/a_star_contracted/bidirectional_time_a_star] (default dijkstra): "
     ).strip().lower() or "dijkstra"
-
-    compare_runs = 3
-    if algo_choice == "compare":
-        compare_runs_text = input(
-            "Compare repetitions per algorithm (default 3): "
-        ).strip()
-        if compare_runs_text:
-            try:
-                compare_runs = int(compare_runs_text)
-                if compare_runs < 1:
-                    print("Compare repetitions must be >= 1.")
-                    return
-            except ValueError:
-                print("Compare repetitions must be an integer.")
-                return
 
     try:
         avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
@@ -362,125 +261,22 @@ def _run_shortest_time_query(graph):
             "a_star_contracted": (a_star_contracted, {}),
             "bidirectional_time_a_star": (bidirectional_time_a_star, {}),
         }
-        if algo_choice == "compare":
-            # Exclude one-time ALT setup from table timings for fairer per-query comparison.
-            if hasattr(graph, "time_heuristic_scale"):
-                graph.time_heuristic_scale()
-            precompute_alt_landmarks(graph, landmark_count=4)
-            precompute_time_alt_landmarks(graph, landmark_count=4)
-            precompute_time_alt_landmarks(graph, landmark_count=16)
-            precompute_departure_alt_landmarks(graph, departure_hour=start_hour, landmark_count=4)
-            precontract_graph(graph)
-            precompute_bwd_min_time(graph, goal)
+        if algo_choice not in algorithm_map:
+            print(f"Unknown time algorithm '{algo_choice}'.")
+            return
 
-            print("\nTime algorithm comparison:")
-            print(
-                f"(runs per algorithm: {compare_runs}, departure: {start_hour:02d}:00, "
-                "runtime measured without stats overhead)"
-            )
-            print("-" * 96)
-            print(
-                f"{'algorithm':24s} {'time(min)':>10s} {'exp':>8s} {'ms_mean':>10s} {'ms_max':>10s} {'path'}"
-            )
-            print("-" * 96)
-
-            comparison_rows = []
-            for algo_name, (algo_fn, algo_kwargs) in algorithm_map.items():
-                try:
-                    runtimes_ms = []
-                    for _ in range(compare_runs):
-                        t0 = time.perf_counter()
-                        algo_fn(
-                            graph,
-                            start,
-                            goal,
-                            cost_by_time,
-                            start_time,
-                            avoid_nodes=avoid_nodes,
-                            avoid_edges=avoid_edges,
-                            **algo_kwargs,
-                        )
-                        runtimes_ms.append((time.perf_counter() - t0) * 1000)
-
-                    result = algo_fn(
-                        graph,
-                        start,
-                        goal,
-                        cost_by_time,
-                        start_time,
-                        return_visited=True,
-                        return_stats=True,
-                        avoid_nodes=avoid_nodes,
-                        avoid_edges=avoid_edges,
-                        **algo_kwargs,
-                    )
-
-                    path = result[0]
-                    total_time = result[1]
-                    visited = result[2] if len(result) >= 3 else []
-                    stats = result[3] if len(result) >= 4 and isinstance(result[3], dict) else {}
-                    expanded = int(stats.get("expanded_nodes", len(visited)))
-                    runtime_mean = sum(runtimes_ms) / len(runtimes_ms)
-                    runtime_max = max(runtimes_ms)
-
-                    if path:
-                        path_preview = f"{path[0]}->{path[-1]} ({len(path)} nodes)"
-                    else:
-                        path_preview = "unreachable"
-
-                    print(
-                        f"{algo_name:24s} {total_time:10.2f} {expanded:8d} {runtime_mean:10.3f} {runtime_max:10.3f} {path_preview}"
-                    )
-                    comparison_rows.append(
-                        (algo_name, path, total_time, visited, expanded, runtime_mean, runtime_max)
-                    )
-
-                except ValueError as skip_error:
-                    print(
-                        f"{algo_name:24s} {'N/A':>10s} {'N/A':>8s} {'N/A':>10s} {'N/A':>10s} "
-                        f"(skipped: {skip_error})"
-                    )
-
-            print("-" * 96)
-
-            baseline = next((row[2] for row in comparison_rows if row[0] == "dijkstra"), None)
-            if baseline not in (None, float("inf"), 0):
-                print("Optimality gaps vs Dijkstra (%):")
-                for algo_name, _, algo_time, _, _, _, _ in comparison_rows:
-                    if algo_time == float("inf"):
-                        gap = float("inf")
-                    else:
-                        gap = ((algo_time - baseline) / baseline) * 100.0
-                    if gap == float("inf"):
-                        print(f"- {algo_name}: inf")
-                    else:
-                        print(f"- {algo_name}: {gap:.4f}%")
-
-            successful = [row for row in comparison_rows if row[1]]
-            if not successful:
-                print("No path found by any time algorithm.")
-                return
-
-            successful.sort(key=lambda row: row[2])
-            _, path, total_time, visited, _, _, _ = successful[0]
-
-        else:
-            if algo_choice not in algorithm_map:
-                print(f"Unknown time algorithm '{algo_choice}'.")
-                return
-
-            algo_fn, algo_kwargs = algorithm_map[algo_choice]
-            path, total_time, visited = algo_fn(
-                graph,
-                start,
-                goal,
-                cost_by_time,
-                start_time,
-                return_visited=True,
-                avoid_nodes=avoid_nodes,
-                avoid_edges=avoid_edges,
-                **algo_kwargs,
-            )
+        algo_fn, algo_kwargs = algorithm_map[algo_choice]
+        path, total_time, visited = algo_fn(
+            graph,
+            start,
+            goal,
+            cost_by_time,
+            start_time,
+            return_visited=True,
+            avoid_nodes=avoid_nodes,
+            avoid_edges=avoid_edges,
+            **algo_kwargs,
+        )
 
         if not path:
             print("No path found.")
@@ -507,6 +303,316 @@ def _run_shortest_time_query(graph):
             cost_type="time",
             start_time=start_time
         ))
+
+    except ValueError as error:
+        print(f"Error: {error}")
+
+
+def _run_combined_query(graph):
+    print(f"\nAvailable nodes: {', '.join(sorted(graph.nodes()))}")
+    start = input("Start node: ").strip()
+    goal = input("Goal node: ").strip()
+    hour_text = input(
+        "Departure hour for time-optimized path (0-23, default 8): "
+    ).strip()
+
+    try:
+        avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
+
+        if hour_text:
+            start_hour = int(hour_text)
+            if not 0 <= start_hour <= 23:
+                print("Hour must be between 0 and 23.")
+                return
+        else:
+            start_hour = 8
+
+        start_time = start_hour * 60
+
+        dist_path, dist_cost, dist_visited = dijkstra(
+            graph,
+            start,
+            goal,
+            cost_by_distance,
+            return_visited=True,
+            avoid_nodes=avoid_nodes,
+            avoid_edges=avoid_edges,
+        )
+
+        time_path, time_cost, time_visited = dijkstra(
+            graph,
+            start,
+            goal,
+            cost_by_time,
+            start_time,
+            return_visited=True,
+            avoid_nodes=avoid_nodes,
+            avoid_edges=avoid_edges,
+        )
+
+        if not dist_path and not time_path:
+            print("No path found for either objective.")
+            return
+
+        if dist_path:
+            print("\nShortest distance path:")
+            if _should_render_visualization(graph):
+                print(
+                    render_network_grid(
+                        graph,
+                        path=dist_path,
+                        visited_nodes=dist_visited,
+                        start_node=start,
+                        end_node=goal,
+                    )
+                )
+            print(
+                render_path_details(
+                    graph,
+                    dist_path,
+                    dist_cost,
+                    cost_type="distance",
+                    start_time=start_time,
+                )
+            )
+        else:
+            print("\nNo distance-optimal path found.")
+
+        if time_path:
+            print(f"\nShortest time path (departure {start_hour:02d}:00):")
+            if _should_render_visualization(graph):
+                print(
+                    render_network_grid(
+                        graph,
+                        path=time_path,
+                        visited_nodes=time_visited,
+                        start_node=start,
+                        end_node=goal,
+                    )
+                )
+            print(
+                render_path_details(
+                    graph,
+                    time_path,
+                    time_cost,
+                    cost_type="time",
+                    start_time=start_time,
+                )
+            )
+        else:
+            print("\nNo time-optimal path found.")
+
+    except ValueError as error:
+        print(f"Error: {error}")
+
+
+def _run_distance_comparison(graph):
+    print(f"\nAvailable nodes: {', '.join(sorted(graph.nodes()))}")
+    start = input("Start node: ").strip()
+    goal = input("Goal node: ").strip()
+
+    try:
+        compare_runs = _prompt_compare_runs()
+        avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
+
+        algorithm_map = {
+            "dijkstra": (dijkstra, {}),
+            "bidirectional_dijkstra": (bidirectional_dijkstra, {}),
+            "a_star": (a_star, {}),
+            "a_star_alt": (a_star_alt, {"landmark_count": 4}),
+            "weighted_a_star": (weighted_a_star, {"heuristic_weight": 1.25}),
+            "bidirectional_a_star": (bidirectional_a_star, {}),
+        }
+
+        if hasattr(graph, "distance_heuristic_scale"):
+            graph.distance_heuristic_scale()
+        precompute_alt_landmarks(graph, landmark_count=4)
+
+        print("\nDistance algorithm comparison")
+        _print_runtime_search_note()
+        print("-" * 102)
+        print(
+            f"{'algorithm':24s} {'distance(km)':>12s} {'search_effort':>14s} {'runtime_ms_mean':>15s} {'runtime_ms_max':>15s} {'path'}"
+        )
+        print("-" * 102)
+
+        comparison_rows = []
+        for algo_name, (algo_fn, algo_kwargs) in algorithm_map.items():
+            runtimes_ms = []
+            for _ in range(compare_runs):
+                t0 = time.perf_counter()
+                algo_fn(
+                    graph,
+                    start,
+                    goal,
+                    cost_by_distance,
+                    avoid_nodes=avoid_nodes,
+                    avoid_edges=avoid_edges,
+                    **algo_kwargs,
+                )
+                runtimes_ms.append((time.perf_counter() - t0) * 1000)
+
+            result = algo_fn(
+                graph,
+                start,
+                goal,
+                cost_by_distance,
+                return_visited=True,
+                return_stats=True,
+                avoid_nodes=avoid_nodes,
+                avoid_edges=avoid_edges,
+                **algo_kwargs,
+            )
+
+            path = result[0]
+            distance = result[1]
+            visited = result[2] if len(result) >= 3 else []
+            stats = result[3] if len(result) >= 4 and isinstance(result[3], dict) else {}
+            expanded = int(stats.get("expanded_nodes", len(visited)))
+            runtime_mean = sum(runtimes_ms) / len(runtimes_ms)
+            runtime_max = max(runtimes_ms)
+            path_preview = f"{path[0]}->{path[-1]} ({len(path)} nodes)" if path else "unreachable"
+
+            print(
+                f"{algo_name:24s} {distance:12.2f} {expanded:14d} {runtime_mean:15.3f} {runtime_max:15.3f} {path_preview}"
+            )
+            comparison_rows.append((algo_name, path, distance, visited, expanded, runtime_mean, runtime_max))
+
+        print("-" * 102)
+
+        baseline = next((row[2] for row in comparison_rows if row[0] == "dijkstra"), None)
+        if baseline not in (None, float("inf"), 0):
+            print("Optimality gaps vs Dijkstra (%):")
+            for algo_name, _, distance, _, _, _, _ in comparison_rows:
+                if distance == float("inf"):
+                    gap = float("inf")
+                else:
+                    gap = ((distance - baseline) / baseline) * 100.0
+                if gap == float("inf"):
+                    print(f"- {algo_name}: inf")
+                else:
+                    print(f"- {algo_name}: {gap:.4f}%")
+
+    except ValueError as error:
+        print(f"Error: {error}")
+
+
+def _run_time_comparison(graph):
+    print(f"\nAvailable nodes: {', '.join(sorted(graph.nodes()))}")
+    start = input("Start node: ").strip()
+    goal = input("Goal node: ").strip()
+    hour_text = input("Departure hour (0-23, default 8): ").strip()
+
+    try:
+        compare_runs = _prompt_compare_runs()
+        avoid_nodes, avoid_edges = _prompt_optional_constraints(graph)
+
+        if hour_text:
+            start_hour = int(hour_text)
+            if not 0 <= start_hour <= 23:
+                print("Hour must be between 0 and 23.")
+                return
+        else:
+            start_hour = 8
+
+        start_time = start_hour * 60
+
+        algorithm_map = {
+            "dijkstra": (dijkstra, {}),
+            "a_star": (a_star, {"heuristic_fn": time_euclidean_heuristic}),
+            "a_star_alt": (a_star_alt, {"landmark_count": 4, "use_time_heuristic": True}),
+            "a_star_active_alt": (a_star_active_alt, {"landmark_count": 16, "active_count": 4}),
+            "a_star_departure_alt": (a_star_departure_alt, {"landmark_count": 4, "departure_hour": start_hour}),
+            "weighted_a_star": (
+                weighted_a_star,
+                {"heuristic_weight": 1.25, "heuristic_fn": time_euclidean_heuristic},
+            ),
+            "dijkstra_contracted": (dijkstra_contracted, {}),
+            "a_star_contracted": (a_star_contracted, {}),
+            "bidirectional_time_a_star": (bidirectional_time_a_star, {}),
+        }
+
+        if hasattr(graph, "time_heuristic_scale"):
+            graph.time_heuristic_scale()
+        precompute_alt_landmarks(graph, landmark_count=4)
+        precompute_time_alt_landmarks(graph, landmark_count=4)
+        precompute_time_alt_landmarks(graph, landmark_count=16)
+        precompute_departure_alt_landmarks(graph, departure_hour=start_hour, landmark_count=4)
+        precontract_graph(graph)
+        precompute_bwd_min_time(graph, goal)
+
+        print(f"\nTime algorithm comparison (departure {start_hour:02d}:00)")
+        _print_runtime_search_note()
+        print("-" * 106)
+        print(
+            f"{'algorithm':24s} {'time(min)':>12s} {'search_effort':>14s} {'runtime_ms_mean':>15s} {'runtime_ms_max':>15s} {'path'}"
+        )
+        print("-" * 106)
+
+        comparison_rows = []
+        for algo_name, (algo_fn, algo_kwargs) in algorithm_map.items():
+            try:
+                runtimes_ms = []
+                for _ in range(compare_runs):
+                    t0 = time.perf_counter()
+                    algo_fn(
+                        graph,
+                        start,
+                        goal,
+                        cost_by_time,
+                        start_time,
+                        avoid_nodes=avoid_nodes,
+                        avoid_edges=avoid_edges,
+                        **algo_kwargs,
+                    )
+                    runtimes_ms.append((time.perf_counter() - t0) * 1000)
+
+                result = algo_fn(
+                    graph,
+                    start,
+                    goal,
+                    cost_by_time,
+                    start_time,
+                    return_visited=True,
+                    return_stats=True,
+                    avoid_nodes=avoid_nodes,
+                    avoid_edges=avoid_edges,
+                    **algo_kwargs,
+                )
+
+                path = result[0]
+                total_time = result[1]
+                visited = result[2] if len(result) >= 3 else []
+                stats = result[3] if len(result) >= 4 and isinstance(result[3], dict) else {}
+                expanded = int(stats.get("expanded_nodes", len(visited)))
+                runtime_mean = sum(runtimes_ms) / len(runtimes_ms)
+                runtime_max = max(runtimes_ms)
+                path_preview = f"{path[0]}->{path[-1]} ({len(path)} nodes)" if path else "unreachable"
+
+                print(
+                    f"{algo_name:24s} {total_time:12.2f} {expanded:14d} {runtime_mean:15.3f} {runtime_max:15.3f} {path_preview}"
+                )
+                comparison_rows.append((algo_name, path, total_time, visited, expanded, runtime_mean, runtime_max))
+
+            except ValueError as skip_error:
+                print(
+                    f"{algo_name:24s} {'N/A':>12s} {'N/A':>14s} {'N/A':>15s} {'N/A':>15s} (skipped: {skip_error})"
+                )
+
+        print("-" * 106)
+
+        baseline = next((row[2] for row in comparison_rows if row[0] == "dijkstra"), None)
+        if baseline not in (None, float("inf"), 0):
+            print("Optimality gaps vs Dijkstra (%):")
+            for algo_name, _, algo_time, _, _, _, _ in comparison_rows:
+                if algo_time == float("inf"):
+                    gap = float("inf")
+                else:
+                    gap = ((algo_time - baseline) / baseline) * 100.0
+                if gap == float("inf"):
+                    print(f"- {algo_name}: inf")
+                else:
+                    print(f"- {algo_name}: {gap:.4f}%")
 
     except ValueError as error:
         print(f"Error: {error}")
@@ -576,6 +682,8 @@ def _run_dataset_benchmarks():
     from evaluation.benchmark_datasets import run_dataset_benchmarks
 
     print("\nRunning benchmark suite on stored datasets...")
+    print("Runtime is end-to-end query time; search effort is reported separately as expanded nodes and stress.")
+    print("Preprocessing is warmed up before timing, so it is not counted in reported runtime.")
     rows = run_dataset_benchmarks(runs_per_pair=10)
     print(f"Benchmark complete. Rows written: {len(rows)}")
     print("Files updated:")
@@ -585,18 +693,46 @@ def _run_dataset_benchmarks():
 
 def _print_cli_help():
     print("\nQuick guide:")
-    print("- Pick a network first (or load one from data/datasets/...).")
-    print("- Use option 1 to inspect the current network and node IDs.")
-    print("- Use option 2 or 3 to run shortest-path queries.")
-    print("- Distance and time queries support algorithm selection or compare mode.")
-    print("- Time compare benchmarks all algorithms using cost_by_time and your departure hour.")
-    print("- Queries support optional avoid nodes/edges (blank to skip).")
+    print("- Start with a network, then inspect it to show the graph and node IDs.")
+    print("- Run distance, time, and combined queries from the main menu.")
+    print("- Use the comparison options to show runtime and search effort side by side.")
+    print("- Generate datasets, then run the benchmark suite to evaluate results on stored graphs.")
+    print("- Runtime is full query time; search effort is expanded nodes/stress.")
     print("- In route view: S=start, E=end, ●=path, ◍=visited.")
-    print("- Use option 5 to generate datasets and 6 to benchmark them.")
+    print("- Blank avoid-node / avoid-edge inputs mean no constraint.")
+
+
+def _print_demo_flow():
+    print("\nSuggested demo flow:")
+    print("1. Environment setup")
+    print("   - Open PowerShell in the project root.")
+    print("   - Activate the virtual environment:")
+    print("     .\\.venv\\Scripts\\Activate.ps1")
+    print("   - Start the program:")
+    print("     python src/main.py")
+    print("2. Network setup")
+    print("   - Choose a baseline dataset or load a dataset folder.")
+    print("   - Use 'Show current network' to confirm the node set and graph layout.")
+    print("3. Query execution")
+    print("   - Run a distance query.")
+    print("   - Run a time query with a departure hour.")
+    print("   - Run the combined query to show both objectives on the same start/goal pair.")
+    print("4. Algorithm evaluation")
+    print("   - Run distance comparison to show runtime vs search effort.")
+    print("   - Run time comparison and point out the expanded-node/stress tradeoff.")
+    print("5. Dataset generation and benchmarking")
+    print("   - Generate datasets.")
+    print("   - Run the benchmark suite.")
+    print("   - Open results/runtime_results.csv and results/analysis.txt to summarize findings.")
+    print("6. Close-out")
+    print("   - Highlight the fastest algorithms for distance and time.")
+    print("   - Mention that optimality gaps remain 0% and runtime includes the full query cost.")
 
 
 def main():
     _ensure_utf8_output()
+    print("Smart Path Finder")
+    print("Use the menu below to move from setup to query execution to evaluation.")
     _print_cli_help()
     graph = _select_network()
 
@@ -604,14 +740,18 @@ def main():
         print("\n" + "=" * 50)
         print("=== Smart Path Finder CLI ===")
         print("=" * 50)
-        print("1. Show network visualization")
+        print("1. Show current network")
         print("2. Find shortest distance path")
         print("3. Find shortest time path")
-        print("4. Change network")
-        print("5. Generate and export datasets")
-        print("6. Benchmark stored datasets")
-        print("7. Exit")
-        choice = input("Choose an option (1-7, h for help): ").strip().lower()
+        print("4. Find shortest distance + time paths")
+        print("5. Compare distance algorithms")
+        print("6. Compare time algorithms")
+        print("7. Change network")
+        print("8. Generate and export datasets")
+        print("9. Benchmark stored datasets")
+        print("10. Show demo workflow")
+        print("11. Exit")
+        choice = input("Choose an option (1-11, h for help): ").strip().lower()
 
         if choice == "h":
             _print_cli_help()
@@ -622,16 +762,24 @@ def main():
         elif choice == "3":
             _run_shortest_time_query(graph)
         elif choice == "4":
-            graph = _select_network()
+            _run_combined_query(graph)
         elif choice == "5":
-            _generate_and_export_datasets()
+            _run_distance_comparison(graph)
         elif choice == "6":
-            _run_dataset_benchmarks()
+            _run_time_comparison(graph)
         elif choice == "7":
+            graph = _select_network()
+        elif choice == "8":
+            _generate_and_export_datasets()
+        elif choice == "9":
+            _run_dataset_benchmarks()
+        elif choice == "10":
+            _print_demo_flow()
+        elif choice == "11":
             print("Goodbye.")
             break
         else:
-            print("Invalid choice. Please enter 1-7 or h.")
+            print("Invalid choice. Please enter 1-11 or h.")
 
 
 if __name__ == "__main__":

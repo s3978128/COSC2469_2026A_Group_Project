@@ -112,6 +112,38 @@ class TestTimeAlgorithms(unittest.TestCase):
         self.assertEqual([], contracted_path)
         self.assertEqual(float("inf"), contracted_cost)
 
+    def test_update_edge_time_profile_changes_costs(self):
+        graph = Graph()
+        graph.add_node("A", 0, 0)
+        graph.add_node("B", 1, 0)
+        graph.add_one_way_edge("A", "B", 1.0, [10.0] * 24)
+
+        path_before, cost_before = dijkstra(
+            graph,
+            "A",
+            "B",
+            cost_by_time,
+            start_time=0,
+        )
+        self.assertEqual(["A", "B"], path_before)
+        self.assertEqual(10.0, cost_before)
+
+        graph.time_heuristic_scale()
+        self.assertIsNotNone(graph._time_heuristic_scale_cache)
+
+        graph.update_edge_time_profile("A", "B", [1.0] * 24)
+        self.assertIsNone(graph._time_heuristic_scale_cache)
+
+        path_after, cost_after = dijkstra(
+            graph,
+            "A",
+            "B",
+            cost_by_time,
+            start_time=0,
+        )
+        self.assertEqual(["A", "B"], path_after)
+        self.assertEqual(1.0, cost_after)
+
 
 if __name__ == "__main__":
     unittest.main()

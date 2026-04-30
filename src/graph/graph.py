@@ -47,6 +47,38 @@ class Graph:
         self._time_heuristic_scale_cache = None
         self._alt_landmark_cache = None
 
+    def _invalidate_time_caches(self):
+        """Clear caches that depend on time-dependent edge weights."""
+        self._time_heuristic_scale_cache = None
+        self._time_alt_landmark_cache = None
+        self._contracted_graph_cache = None
+
+        if hasattr(self, "_departure_alt_caches"):
+            delattr(self, "_departure_alt_caches")
+        if hasattr(self, "_bwd_min_time_cache"):
+            delattr(self, "_bwd_min_time_cache")
+
+    def update_edge_time_profile(self, from_id, to_id, time_weights):
+        """Update the 24-hour travel-time profile for a directed edge.
+
+        This preserves the graph topology but invalidates time-dependent caches
+        so future queries use the updated edge costs.
+        """
+        if len(time_weights) != 24:
+            raise ValueError("time_weights must contain exactly 24 values")
+
+        edges = self.adj.get(from_id)
+        if edges is None:
+            raise ValueError(f"Unknown source node '{from_id}'")
+
+        for edge in edges:
+            if edge.destination == to_id:
+                edge.time_list = [float(t) for t in time_weights]
+                self._invalidate_time_caches()
+                return
+
+        raise ValueError(f"Edge {from_id} -> {to_id} not found")
+
     def add_two_way_edge(self, node_a, node_b, distance, time_weights):
         """Add edges in both directions (two-way road)."""
         self.add_edge(node_a, node_b, distance, time_weights)
