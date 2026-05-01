@@ -3,22 +3,22 @@ Dataset: graph_100
   Edges: 296
   Edge/Node ratio: 2.96
   [Distance-based]
-  dijkstra: mean=0.1798 ms, max=0.2737 ms
+  dijkstra: mean=0.3614 ms, max=0.5962 ms
     expanded_nodes: mean=79.40, max=89.00
     stress: mean=0.7940, max=0.8900
-  bidirectional_dijkstra: mean=0.1894 ms, max=0.2854 ms
+  bidirectional_dijkstra: mean=0.4460 ms, max=1.0659 ms
     expanded_nodes: mean=60.40, max=68.00
     stress: mean=0.6040, max=0.6800
-  a_star: mean=0.2673 ms, max=0.5452 ms
+  a_star: mean=0.5927 ms, max=1.1140 ms
     expanded_nodes: mean=78.40, max=89.00
     stress: mean=0.7840, max=0.8900
-  a_star_alt: mean=0.1672 ms, max=0.2493 ms
+  a_star_alt: mean=0.2735 ms, max=0.4848 ms
     expanded_nodes: mean=32.80, max=39.00
     stress: mean=0.3280, max=0.3900
-  weighted_a_star: mean=0.2598 ms, max=0.3416 ms
+  weighted_a_star: mean=0.5902 ms, max=1.4060 ms
     expanded_nodes: mean=77.60, max=89.00
     stress: mean=0.7760, max=0.8900
-  bidirectional_a_star: mean=0.7018 ms, max=0.8634 ms
+  bidirectional_a_star: mean=1.8869 ms, max=3.8107 ms
     expanded_nodes: mean=170.80, max=186.00
     stress: mean=1.7080, max=1.8600
   dijkstra gap: mean=0.0000%, max=0.0000%
@@ -28,31 +28,31 @@ Dataset: graph_100
   weighted_a_star gap: mean=0.0000%, max=0.0000%
   bidirectional_a_star gap: mean=-0.0000%, max=0.0000%
   [Time-based (departure: 08:00)]
-  dijkstra: mean=0.1733 ms, max=0.3907 ms
+  dijkstra: mean=0.3100 ms, max=0.8096 ms
     expanded_nodes: mean=77.80, max=94.00
     stress: mean=0.7780, max=0.9400
-  a_star: mean=0.2366 ms, max=0.3344 ms
+  a_star: mean=0.5236 ms, max=0.9819 ms
     expanded_nodes: mean=75.00, max=93.00
     stress: mean=0.7500, max=0.9300
-  a_star_alt: mean=0.2454 ms, max=0.3753 ms
+  a_star_alt: mean=0.3925 ms, max=0.9187 ms
     expanded_nodes: mean=50.60, max=70.00
     stress: mean=0.5060, max=0.7000
-  weighted_a_star: mean=0.2408 ms, max=0.3475 ms
+  weighted_a_star: mean=0.6026 ms, max=1.4624 ms
     expanded_nodes: mean=74.20, max=93.00
     stress: mean=0.7420, max=0.9300
-  a_star_active_alt: mean=0.2631 ms, max=0.3617 ms
+  a_star_active_alt: mean=0.5741 ms, max=0.9875 ms
     expanded_nodes: mean=55.40, max=78.00
     stress: mean=0.5540, max=0.7800
-  a_star_departure_alt: mean=0.2517 ms, max=0.4010 ms
+  a_star_departure_alt: mean=0.5270 ms, max=1.2962 ms
     expanded_nodes: mean=50.60, max=70.00
     stress: mean=0.5060, max=0.7000
-  dijkstra_contracted: mean=0.1668 ms, max=0.2201 ms
+  dijkstra_contracted: mean=0.2937 ms, max=0.5313 ms
     expanded_nodes: mean=77.80, max=94.00
     stress: mean=0.7780, max=0.9400
-  a_star_contracted: mean=0.2447 ms, max=0.5608 ms
+  a_star_contracted: mean=0.5468 ms, max=1.2125 ms
     expanded_nodes: mean=75.00, max=93.00
     stress: mean=0.7500, max=0.9300
-  bidirectional_time_a_star: mean=0.1293 ms, max=0.2235 ms
+  bidirectional_time_a_star: mean=0.3044 ms, max=0.4946 ms
     expanded_nodes: mean=45.60, max=70.00
     stress: mean=0.4560, max=0.7000
   dijkstra (time) gap: mean=0.0000%, max=0.0000%
@@ -70,22 +70,22 @@ Dataset: graph_1000
   Edges: 3466
   Edge/Node ratio: 3.47
   [Distance-based]
-  dijkstra: mean=1.3401 ms, max=3.0521 ms
+  dijkstra: mean=3.6642 ms, max=11.4074 ms
     expanded_nodes: mean=411.00, max=878.00
     stress: mean=0.4110, max=0.8780
-  bidirectional_dijkstra: mean=1.3061 ms, max=4.1226 ms
+  bidirectional_dijkstra: mean=1.9430 ms, max=6.7530 ms
     expanded_nodes: mean=285.20, max=625.00
     stress: mean=0.2852, max=0.6250
-  a_star: mean=1.8766 ms, max=4.1837 ms
+  a_star: mean=4.2926 ms, max=17.2309 ms
     expanded_nodes: mean=396.80, max=859.00
     stress: mean=0.3968, max=0.8590
-  a_star_alt: mean=1.1981 ms, max=2.7355 ms
+  a_star_alt: mean=2.7181 ms, max=9.0622 ms
     expanded_nodes: mean=152.40, max=288.00
     stress: mean=0.1524, max=0.2880
-  weighted_a_star: mean=1.8792 ms, max=4.4899 ms
+  weighted_a_star: mean=3.1500 ms, max=8.5889 ms
     expanded_nodes: mean=393.40, max=853.00
     stress: mean=0.3934, max=0.8530
-  bidirectional_a_star: mean=6.1676 ms, max=13.8807 ms
+  bidirectional_a_star: mean=15.9589 ms, max=49.5236 ms
     expanded_nodes: mean=1001.80, max=1830.00
     stress: mean=1.0018, max=1.8300
   dijkstra gap: mean=0.0000%, max=0.0000%
@@ -95,31 +95,31 @@ Dataset: graph_1000
   weighted_a_star gap: mean=0.0000%, max=0.0000%
   bidirectional_a_star gap: mean=-0.0000%, max=-0.0000%
   [Time-based (departure: 08:00)]
-  dijkstra: mean=1.3138 ms, max=2.8317 ms
+  dijkstra: mean=3.4111 ms, max=9.3344 ms
     expanded_nodes: mean=428.40, max=821.00
     stress: mean=0.4284, max=0.8210
-  a_star: mean=1.7956 ms, max=4.1582 ms
+  a_star: mean=4.1018 ms, max=12.1884 ms
     expanded_nodes: mean=408.40, max=789.00
     stress: mean=0.4084, max=0.7890
-  a_star_alt: mean=1.5454 ms, max=3.6464 ms
+  a_star_alt: mean=3.3129 ms, max=10.1002 ms
     expanded_nodes: mean=229.00, max=454.00
     stress: mean=0.2290, max=0.4540
-  weighted_a_star: mean=1.7885 ms, max=3.7976 ms
+  weighted_a_star: mean=4.0630 ms, max=16.9914 ms
     expanded_nodes: mean=403.80, max=781.00
     stress: mean=0.4038, max=0.7810
-  a_star_active_alt: mean=1.5183 ms, max=3.6241 ms
+  a_star_active_alt: mean=5.1442 ms, max=13.3892 ms
     expanded_nodes: mean=223.80, max=434.00
     stress: mean=0.2238, max=0.4340
-  a_star_departure_alt: mean=1.5433 ms, max=3.6659 ms
+  a_star_departure_alt: mean=3.9333 ms, max=11.1960 ms
     expanded_nodes: mean=229.00, max=454.00
     stress: mean=0.2290, max=0.4540
-  dijkstra_contracted: mean=1.4861 ms, max=3.4644 ms
+  dijkstra_contracted: mean=2.0680 ms, max=5.6533 ms
     expanded_nodes: mean=428.40, max=821.00
     stress: mean=0.4284, max=0.8210
-  a_star_contracted: mean=2.0484 ms, max=4.7806 ms
+  a_star_contracted: mean=3.4356 ms, max=8.8638 ms
     expanded_nodes: mean=408.40, max=789.00
     stress: mean=0.4084, max=0.7890
-  bidirectional_time_a_star: mean=0.5970 ms, max=1.2443 ms
+  bidirectional_time_a_star: mean=1.4026 ms, max=6.5672 ms
     expanded_nodes: mean=145.20, max=274.00
     stress: mean=0.1452, max=0.2740
   dijkstra (time) gap: mean=0.0000%, max=0.0000%
@@ -137,22 +137,22 @@ Dataset: graph_1000_stress
   Edges: 5292
   Edge/Node ratio: 5.29
   [Distance-based]
-  dijkstra: mean=1.6124 ms, max=4.1954 ms
+  dijkstra: mean=3.7313 ms, max=12.1798 ms
     expanded_nodes: mean=358.60, max=858.00
     stress: mean=0.3586, max=0.8580
-  bidirectional_dijkstra: mean=1.4997 ms, max=4.0334 ms
+  bidirectional_dijkstra: mean=3.8841 ms, max=14.0420 ms
     expanded_nodes: mean=256.00, max=619.00
     stress: mean=0.2560, max=0.6190
-  a_star: mean=1.9847 ms, max=5.1573 ms
+  a_star: mean=4.4861 ms, max=15.4039 ms
     expanded_nodes: mean=332.00, max=828.00
     stress: mean=0.3320, max=0.8280
-  a_star_alt: mean=0.7720 ms, max=2.0062 ms
+  a_star_alt: mean=1.7965 ms, max=5.2268 ms
     expanded_nodes: mean=71.00, max=171.00
     stress: mean=0.0710, max=0.1710
-  weighted_a_star: mean=1.9526 ms, max=5.5798 ms
+  weighted_a_star: mean=3.5268 ms, max=17.9752 ms
     expanded_nodes: mean=323.60, max=821.00
     stress: mean=0.3236, max=0.8210
-  bidirectional_a_star: mean=7.4460 ms, max=15.8576 ms
+  bidirectional_a_star: mean=19.1012 ms, max=47.1824 ms
     expanded_nodes: mean=976.40, max=1807.00
     stress: mean=0.9764, max=1.8070
   dijkstra gap: mean=0.0000%, max=0.0000%
@@ -162,31 +162,31 @@ Dataset: graph_1000_stress
   weighted_a_star gap: mean=0.0000%, max=0.0000%
   bidirectional_a_star gap: mean=-0.0000%, max=0.0000%
   [Time-based (departure: 08:00)]
-  dijkstra: mean=1.4907 ms, max=4.4158 ms
+  dijkstra: mean=3.9357 ms, max=14.3518 ms
     expanded_nodes: mean=359.00, max=911.00
     stress: mean=0.3590, max=0.9110
-  a_star: mean=1.8966 ms, max=6.2596 ms
+  a_star: mean=4.4154 ms, max=12.4526 ms
     expanded_nodes: mean=337.60, max=880.00
     stress: mean=0.3376, max=0.8800
-  a_star_alt: mean=2.4011 ms, max=6.6770 ms
+  a_star_alt: mean=4.8039 ms, max=21.3893 ms
     expanded_nodes: mean=204.80, max=593.00
     stress: mean=0.2048, max=0.5930
-  weighted_a_star: mean=1.9028 ms, max=5.6400 ms
+  weighted_a_star: mean=4.0401 ms, max=14.8617 ms
     expanded_nodes: mean=332.40, max=872.00
     stress: mean=0.3324, max=0.8720
-  a_star_active_alt: mean=1.6710 ms, max=5.8355 ms
+  a_star_active_alt: mean=4.7115 ms, max=16.4299 ms
     expanded_nodes: mean=212.60, max=618.00
     stress: mean=0.2126, max=0.6180
-  a_star_departure_alt: mean=1.7038 ms, max=5.3381 ms
+  a_star_departure_alt: mean=5.0917 ms, max=18.0401 ms
     expanded_nodes: mean=204.80, max=593.00
     stress: mean=0.2048, max=0.5930
-  dijkstra_contracted: mean=1.5588 ms, max=4.7195 ms
+  dijkstra_contracted: mean=3.0607 ms, max=11.8009 ms
     expanded_nodes: mean=359.00, max=911.00
     stress: mean=0.3590, max=0.9110
-  a_star_contracted: mean=2.1128 ms, max=5.8167 ms
+  a_star_contracted: mean=5.7308 ms, max=23.1713 ms
     expanded_nodes: mean=337.60, max=880.00
     stress: mean=0.3376, max=0.8800
-  bidirectional_time_a_star: mean=0.9110 ms, max=3.4845 ms
+  bidirectional_time_a_star: mean=2.5858 ms, max=10.7322 ms
     expanded_nodes: mean=152.60, max=481.00
     stress: mean=0.1526, max=0.4810
   dijkstra (time) gap: mean=0.0000%, max=0.0000%
@@ -204,22 +204,22 @@ Dataset: graph_5000
   Edges: 17294
   Edge/Node ratio: 3.46
   [Distance-based]
-  dijkstra: mean=15.6338 ms, max=22.9228 ms
+  dijkstra: mean=38.9697 ms, max=73.6595 ms
     expanded_nodes: mean=3740.80, max=4866.00
     stress: mean=0.7482, max=0.9732
-  bidirectional_dijkstra: mean=21.6476 ms, max=37.9373 ms
+  bidirectional_dijkstra: mean=34.4878 ms, max=81.0429 ms
     expanded_nodes: mean=3517.80, max=4449.00
     stress: mean=0.7036, max=0.8898
-  a_star: mean=20.8697 ms, max=33.5747 ms
+  a_star: mean=36.5900 ms, max=85.2453 ms
     expanded_nodes: mean=3664.00, max=4858.00
     stress: mean=0.7328, max=0.9716
-  a_star_alt: mean=4.3314 ms, max=11.2776 ms
+  a_star_alt: mean=11.7979 ms, max=45.0941 ms
     expanded_nodes: mean=537.60, max=1256.00
     stress: mean=0.1075, max=0.2512
-  weighted_a_star: mean=20.5739 ms, max=31.0552 ms
+  weighted_a_star: mean=41.8527 ms, max=90.7221 ms
     expanded_nodes: mean=3648.20, max=4858.00
     stress: mean=0.7296, max=0.9716
-  bidirectional_a_star: mean=65.1414 ms, max=76.5293 ms
+  bidirectional_a_star: mean=170.7830 ms, max=292.4809 ms
     expanded_nodes: mean=8728.40, max=9856.00
     stress: mean=1.7457, max=1.9712
   dijkstra gap: mean=0.0000%, max=0.0000%
@@ -229,31 +229,31 @@ Dataset: graph_5000
   weighted_a_star gap: mean=0.0000%, max=0.0000%
   bidirectional_a_star gap: mean=-0.0000%, max=0.0000%
   [Time-based (departure: 08:00)]
-  dijkstra: mean=16.8537 ms, max=28.4250 ms
+  dijkstra: mean=34.9736 ms, max=69.4891 ms
     expanded_nodes: mean=3756.40, max=4889.00
     stress: mean=0.7513, max=0.9778
-  a_star: mean=20.6541 ms, max=32.8442 ms
+  a_star: mean=42.5564 ms, max=88.3972 ms
     expanded_nodes: mean=3638.20, max=4880.00
     stress: mean=0.7276, max=0.9760
-  a_star_alt: mean=14.5472 ms, max=26.7310 ms
+  a_star_alt: mean=34.4268 ms, max=89.8520 ms
     expanded_nodes: mean=1677.20, max=2578.00
     stress: mean=0.3354, max=0.5156
-  weighted_a_star: mean=20.2778 ms, max=30.2915 ms
+  weighted_a_star: mean=42.1181 ms, max=81.1529 ms
     expanded_nodes: mean=3608.40, max=4878.00
     stress: mean=0.7217, max=0.9756
-  a_star_active_alt: mean=14.3766 ms, max=25.8396 ms
+  a_star_active_alt: mean=40.7539 ms, max=82.6265 ms
     expanded_nodes: mean=1674.40, max=2578.00
     stress: mean=0.3349, max=0.5156
-  a_star_departure_alt: mean=14.8310 ms, max=32.0666 ms
+  a_star_departure_alt: mean=46.9552 ms, max=81.1418 ms
     expanded_nodes: mean=1677.20, max=2578.00
     stress: mean=0.3354, max=0.5156
-  dijkstra_contracted: mean=15.0993 ms, max=21.2676 ms
+  dijkstra_contracted: mean=41.1064 ms, max=70.2575 ms
     expanded_nodes: mean=3756.40, max=4889.00
     stress: mean=0.7513, max=0.9778
-  a_star_contracted: mean=22.6761 ms, max=45.6329 ms
+  a_star_contracted: mean=53.0659 ms, max=152.1080 ms
     expanded_nodes: mean=3638.20, max=4880.00
     stress: mean=0.7276, max=0.9760
-  bidirectional_time_a_star: mean=7.8629 ms, max=19.7593 ms
+  bidirectional_time_a_star: mean=22.5658 ms, max=62.5255 ms
     expanded_nodes: mean=1244.80, max=2578.00
     stress: mean=0.2490, max=0.5156
   dijkstra (time) gap: mean=0.0000%, max=0.0000%

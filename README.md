@@ -180,9 +180,18 @@ Outputs:
 - `results/runtime_results.csv`
 - `results/analysis.txt`
 
+Archived benchmark snapshots:
+
+- `results/analysis_default.txt`: the default dataset suite under `data/datasets/default/`
+- `results/analysis_seed43.txt`: the same suite regenerated with seed `43` for a robustness check
+
 Benchmark CSV now also includes explainability/search-effort metrics when
 available (for example expanded node counts) so runtime numbers can be
 interpreted with search behavior.
+
+The corresponding row-level CSV outputs live in `results/` alongside the analysis files.
+
+All analysis files include the full algorithm set for each supported objective and every dataset discovered by the runner for that snapshot. The current default suite covers `graph_100`, `graph_1000`, `graph_1000_stress`, and `graph_5000`.
 
 By default, the benchmark runner uses `data/datasets/default/` when it exists;
 otherwise it falls back to the legacy `data/datasets/` layout.
@@ -296,47 +305,52 @@ All benchmarks use 5 query pairs per dataset, 10 runs per pair, departure at 08:
 
 | Algorithm | graph_100 mean ms | graph_1000 mean ms | graph_5000 mean ms | graph_5000 stress |
 |---|---|---|---|---|
-| `dijkstra` | 0.18 | 1.45 | 16.95 | 0.748 |
-| `bidirectional_dijkstra` | 0.21 | 1.51 | 23.80 | 0.704 |
-| `a_star` | 0.27 | 2.17 | 21.72 | 0.733 |
-| `a_star_alt` | **0.18** | **1.26** | **5.01** | **0.108** |
-| `weighted_a_star` | 0.28 | 1.98 | 23.17 | 0.730 |
-| `bidirectional_a_star` | 0.76 | 6.36 | 71.11 | 1.746 |
+| `dijkstra` | 0.36 | 3.66 | 38.97 | 0.748 |
+| `bidirectional_dijkstra` | 0.45 | **1.94** | 34.49 | 0.704 |
+| `a_star` | 0.59 | 4.29 | 36.59 | 0.733 |
+| `a_star_alt` | **0.27** | 2.72 | **11.80** | **0.108** |
+| `weighted_a_star` | 0.59 | 3.15 | 41.85 | 0.730 |
+| `bidirectional_a_star` | 1.89 | 15.96 | 170.78 | 1.746 |
 
-**Distance winner:** `a_star_alt` — best runtime across all graph sizes with 85% fewer node expansions at 5000-node scale. All algorithms return optimal paths (0% gap).
+**Distance highlights:** `a_star_alt` is fastest on graph_100 and graph_5000 and has the lowest stress (0.108 at 5000). `bidirectional_dijkstra` is fastest on graph_1000. All algorithms return optimal paths (0% gap).
 
 ### Time-based (TDSP) results
 
 | Algorithm | graph_100 mean ms | graph_1000 mean ms | graph_5000 mean ms | graph_5000 stress |
 |---|---|---|---|---|
-| `dijkstra` | 0.17 | 1.69 | 17.35 | 0.751 |
-| `a_star` | 0.24 | 2.00 | 22.31 | 0.728 |
-| `a_star_alt` | 0.27 | 1.49 | 16.56 | 0.335 |
-| `weighted_a_star` | 0.26 | 1.89 | 21.94 | 0.722 |
-| `a_star_active_alt` | 0.30 | 1.45 | 15.93 | 0.335 |
-| `a_star_departure_alt` | 0.30 | 1.56 | 16.97 | 0.335 |
-| `dijkstra_contracted` | 0.18 | 1.46 | 17.61 | 0.751 |
-| `a_star_contracted` | 0.28 | 1.99 | 23.44 | 0.728 |
-| `bidirectional_time_a_star` | **0.14** | **0.63** | **7.89** | **0.249** |
+| `dijkstra` | 0.31 | 3.41 | 34.97 | 0.751 |
+| `a_star` | 0.52 | 4.10 | 42.56 | 0.728 |
+| `a_star_alt` | 0.39 | 3.31 | 34.43 | 0.335 |
+| `weighted_a_star` | 0.60 | 4.06 | 42.12 | 0.722 |
+| `a_star_active_alt` | 0.57 | 5.14 | 40.75 | 0.335 |
+| `a_star_departure_alt` | 0.53 | 3.93 | 46.96 | 0.335 |
+| `dijkstra_contracted` | **0.29** | 2.07 | 41.11 | 0.751 |
+| `a_star_contracted` | 0.55 | 3.44 | 53.07 | 0.728 |
+| `bidirectional_time_a_star` | 0.30 | **1.40** | **22.57** | **0.249** |
 
-**TDSP winner (runtime and expansions) at graph_5000:** `bidirectional_time_a_star` (7.89 ms, stress 0.249) — beats Dijkstra on both runtime (-55%) and node expansions (-67%). The backward min-time heuristic is tight enough that the per-node savings outweigh the lookup overhead.
+**TDSP winner (runtime and expansions) at graph_5000:** `bidirectional_time_a_star` (22.57 ms, stress 0.249) — faster than Dijkstra (34.97 ms) by ~35% while expanding ~67% fewer nodes. The backward min-time heuristic remains tight enough that the per-node savings outweigh the lookup overhead.
 
-**Runner-up by runtime:** `dijkstra` (17.35 ms) — best of the heuristic-free algorithms; most other A*-based approaches are slower due to heuristic overhead exceeding their node-expansion savings.
+**Runner-up by runtime at graph_5000:** `a_star_alt` (34.43 ms, stress 0.335) — slightly faster than Dijkstra while still reducing expansions.
 
-**Best of the landmark-based approaches:** `a_star_active_alt` (15.93 ms, stress 0.335) — active landmark selection beats fixed landmark sets while still reducing expansions vs Dijkstra.
+**Heuristic overhead note:** Other A*-based variants (`a_star`, `weighted_a_star`, `a_star_active_alt`, `a_star_departure_alt`, `a_star_contracted`) remain slower than Dijkstra at graph_5000, indicating overhead dominates their expansion savings.
 
 All TDSP algorithms return optimal paths (0% gap vs Dijkstra baseline).
 
 ## Summary of Findings
 
 **Distance problem:**
-- `a_star_alt` is the best distance algorithm across all graph sizes — ALT landmark heuristic cuts node expansions by ~85% at 5000 nodes and wins on runtime at every scale tested.
+- `a_star_alt` is the best overall distance performer across the full default suite and remains the fastest distance method in the seed-43 run as well.
+- It wins because ALT landmarks sharply reduce node expansions, which matters more than per-node overhead once the graphs get larger.
+- `bidirectional_dijkstra` can still be fastest on some mid-sized samples such as graph_1000, where bidirectional search reduces the explored frontier enough to offset its extra bookkeeping.
 
 **Time-dependent shortest path (TDSP) problem:**
-- `bidirectional_time_a_star` wins on both runtime (7.89 ms) and node expansions (stress 0.249) at graph_5000. Its backward min-time Dijkstra heuristic is tight enough to overcome Python's heuristic overhead.
-- Most other A*-based TDSP algorithms (`a_star`, `a_star_alt`, `weighted_a_star`, `a_star_contracted`) are slower than raw Dijkstra — their heuristic evaluation cost per node exceeds the savings from expanding fewer nodes.
-- `a_star_active_alt` (15.93 ms, stress 0.335) is the best of the landmark-based approaches — active landmark selection cuts expansions while keeping runtime near Dijkstra.
+- `bidirectional_time_a_star` is the best overall TDSP performer in both the default and seed-43 benchmark runs.
+- It wins because the backward min-time search gives a tighter admissible heuristic, so the reduced search effort outweighs the extra bidirectional bookkeeping.
+- Most other A*-based TDSP algorithms (`a_star`, `weighted_a_star`, `a_star_active_alt`, `a_star_departure_alt`, `a_star_contracted`) are slower than raw Dijkstra in the larger graphs because their heuristic cost per node is still high relative to the pruning they achieve.
+- `a_star_alt` and `a_star_active_alt` remain useful as lower-stress TDSP options, but they are usually best interpreted as search-effort reducers rather than pure runtime winners.
 - All TDSP algorithms return provably optimal paths (0% gap vs Dijkstra baseline).
+
+**Robustness check:** The seed-43 run preserves the same overall winners as the default suite: `a_star_alt` for distance and `bidirectional_time_a_star` for TDSP. The absolute timings change because the generated graph topology changes with the seed, but the relative ranking stays stable.
 
 **Key insight:** At Python scale, algorithm complexity and runtime do not always align. Reporting expanded_nodes and stress alongside ms explains when a "smarter" algorithm is slower due to constant-factor overhead.
 
