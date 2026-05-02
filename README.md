@@ -121,15 +121,19 @@ Visualization legend includes:
 python src/generator/generate_datasets.py
 ```
 
-Default generated sets are written to `data/datasets/default/` so the benchmark
-suite stays separate from ad hoc experimentation.
+By default the generator now writes to the top-level `data/datasets/` directory.
+To keep a stable baseline for README reporting, keep an archived snapshot under
+`data/datasets/default/` and place exploratory or CLI-generated runs under
+`data/datasets/experiments/` or a seed-specific folder such as
+`data/datasets/seed43/`.
 
 Suggested layout:
 
-- `data/datasets/default/` - baseline benchmark graphs
+- `data/datasets/default/` - baseline benchmark graphs (archive for README)
 - `data/datasets/experiments/` - optional custom or exploratory graphs
+- `data/datasets/seed43/` - example seeded generation used for robustness checks
 
-Default generated sets:
+Default generated sets (baseline):
 
 | Dataset | Grid | Scenario | Intended structure |
 |---|---|---|---|
@@ -138,9 +142,16 @@ Default generated sets:
 | `graph_1000_stress` | 25x40 | `stress` | Denser variant of the 1000-node grid with more hub nodes |
 | `graph_5000` | 50x100 | `mixed` | Larger mixed network with the same hub pattern, used to stress scale |
 
-These are the default benchmark graphs. If you generate additional custom
-graphs, put them under `data/datasets/experiments/` so benchmark results stay
-separated from exploratory runs.
+These are the default benchmark graphs (baseline). If you generate additional
+custom graphs, put them under `data/datasets/experiments/` or a seeded folder
+so benchmark results stay separated from the archived baseline used in the
+README.
+
+Example: generate a seeded experimental suite into `data/datasets/seed43/`:
+
+```bash
+python src/generator/generate_datasets.py --seed 43 --base-dir data/datasets/seed43
+```
 
 Each dataset folder contains:
 
@@ -184,6 +195,9 @@ Archived benchmark snapshots:
 
 - `results/analysis_default.txt`: the default dataset suite under `data/datasets/default/`
 - `results/analysis_seed43.txt`: the same suite regenerated with seed `43` for a robustness check
+- `results/analysis_cli.txt`: benchmark of the top-level CLI-generated datasets (data/datasets/)
+
+Row-level CSV outputs for CLI runs are also saved alongside other results, e.g. `results/runtime_results_cli.csv`.
 
 Benchmark CSV now also includes explainability/search-effort metrics when
 available (for example expanded node counts) so runtime numbers can be
@@ -299,42 +313,46 @@ All preprocessing is cached on the graph object and excluded from timed query lo
 
 ## Cross-Dataset Performance Summary
 
-All benchmarks use 5 query pairs per dataset, 10 runs per pair, departure at 08:00 for time-based queries. Preprocessing (landmark/contraction/backward-Dijkstra) is excluded from timed query loops. Default benchmarks include `graph_1000_stress`; summary tables below focus on the three baseline datasets, while full stress results are in `results/analysis.txt`.
+All benchmarks use 5 query pairs per dataset, 10 runs per pair, departure at 08:00 for time-based queries. Preprocessing (landmark/contraction/backward-Dijkstra) is excluded from timed query loops. The summary below covers every dataset in both the default archive and the seed-43 robustness run.
 
-### Distance-based results
+### Best Performers By Dataset
 
-| Algorithm | graph_100 mean ms | graph_1000 mean ms | graph_5000 mean ms | graph_5000 stress |
+| Dataset | Default best distance | Default best TDSP | Seed43 best distance | Seed43 best TDSP |
 |---|---|---|---|---|
-| `dijkstra` | 0.36 | 3.66 | 38.97 | 0.748 |
-| `bidirectional_dijkstra` | 0.45 | **1.94** | 34.49 | 0.704 |
-| `a_star` | 0.59 | 4.29 | 36.59 | 0.733 |
-| `a_star_alt` | **0.27** | 2.72 | **11.80** | **0.108** |
-| `weighted_a_star` | 0.59 | 3.15 | 41.85 | 0.730 |
-| `bidirectional_a_star` | 1.89 | 15.96 | 170.78 | 1.746 |
+| `graph_100` | `a_star_alt` - 0.27 ms, stress 0.328 | `bidirectional_time_a_star` - 0.30 ms, stress 0.456 | `a_star_alt` - 0.17 ms, stress 0.242 | `bidirectional_time_a_star` - 0.14 ms, stress 0.434 |
+| `graph_1000` | `bidirectional_dijkstra` - 1.94 ms, stress 0.285 | `bidirectional_time_a_star` - 1.40 ms, stress 0.145 | `a_star_alt` - 0.73 ms, stress 0.086 | `bidirectional_time_a_star` - 0.59 ms, stress 0.115 |
+| `graph_1000_stress` | `a_star_alt` - 1.80 ms, stress 0.071 | `bidirectional_time_a_star` - 1.19 ms, stress 0.153 | `a_star_alt` - 1.06 ms, stress 0.089 | `bidirectional_time_a_star` - 1.35 ms, stress 0.153 |
+| `graph_5000` | `a_star_alt` - 11.80 ms, stress 0.108 | `bidirectional_time_a_star` - 22.57 ms, stress 0.249 | `a_star_alt` - 5.45 ms, stress 0.108 | `bidirectional_time_a_star` - 8.42 ms, stress 0.249 |
 
-**Distance highlights:** `a_star_alt` is fastest on graph_100 and graph_5000 and has the lowest stress (0.108 at 5000). `bidirectional_dijkstra` is fastest on graph_1000. All algorithms return optimal paths (0% gap).
+### Distance Results
 
-### Time-based (TDSP) results
+The distance benchmark is consistently won by `a_star_alt` for `graph_100`, `graph_1000_stress`, and `graph_5000` in both runs. The only exception is the default `graph_1000` dataset, where `bidirectional_dijkstra` edges out `a_star_alt` on runtime while still keeping optimality.
 
-| Algorithm | graph_100 mean ms | graph_1000 mean ms | graph_5000 mean ms | graph_5000 stress |
-|---|---|---|---|---|
-| `dijkstra` | 0.31 | 3.41 | 34.97 | 0.751 |
-| `a_star` | 0.52 | 4.10 | 42.56 | 0.728 |
-| `a_star_alt` | 0.39 | 3.31 | 34.43 | 0.335 |
-| `weighted_a_star` | 0.60 | 4.06 | 42.12 | 0.722 |
-| `a_star_active_alt` | 0.57 | 5.14 | 40.75 | 0.335 |
-| `a_star_departure_alt` | 0.53 | 3.93 | 46.96 | 0.335 |
-| `dijkstra_contracted` | **0.29** | 2.07 | 41.11 | 0.751 |
-| `a_star_contracted` | 0.55 | 3.44 | 53.07 | 0.728 |
-| `bidirectional_time_a_star` | 0.30 | **1.40** | **22.57** | **0.249** |
+| Dataset | Default winner | Seed43 winner |
+|---|---|---|
+| `graph_100` | `a_star_alt` | `a_star_alt` |
+| `graph_1000` | `bidirectional_dijkstra` | `a_star_alt` |
+| `graph_1000_stress` | `a_star_alt` | `a_star_alt` |
+| `graph_5000` | `a_star_alt` | `a_star_alt` |
 
-**TDSP winner (runtime and expansions) at graph_5000:** `bidirectional_time_a_star` (22.57 ms, stress 0.249) — faster than Dijkstra (34.97 ms) by ~35% while expanding ~67% fewer nodes. The backward min-time heuristic remains tight enough that the per-node savings outweigh the lookup overhead.
+### TDSP Results
 
-**Runner-up by runtime at graph_5000:** `a_star_alt` (34.43 ms, stress 0.335) — slightly faster than Dijkstra while still reducing expansions.
+`bidirectional_time_a_star` is the best TDSP performer across every dataset in both the default and seed-43 runs. It is the only TDSP method that is both consistently fast and consistently low-stress at every scale we benchmarked.
 
-**Heuristic overhead note:** Other A*-based variants (`a_star`, `weighted_a_star`, `a_star_active_alt`, `a_star_departure_alt`, `a_star_contracted`) remain slower than Dijkstra at graph_5000, indicating overhead dominates their expansion savings.
+| Dataset | Default winner | Seed43 winner |
+|---|---|---|
+| `graph_100` | `bidirectional_time_a_star` | `bidirectional_time_a_star` |
+| `graph_1000` | `bidirectional_time_a_star` | `bidirectional_time_a_star` |
+| `graph_1000_stress` | `bidirectional_time_a_star` | `bidirectional_time_a_star` |
+| `graph_5000` | `bidirectional_time_a_star` | `bidirectional_time_a_star` |
 
-All TDSP algorithms return optimal paths (0% gap vs Dijkstra baseline).
+### Insights Gained
+
+- `a_star_alt` is the most reliable distance algorithm overall, especially once the graph gets denser or larger.
+- `bidirectional_time_a_star` is the only TDSP method that stays ahead of Dijkstra at every dataset size we tested.
+- `graph_1000_stress` is a useful stress case because it shows the biggest gap between plain Dijkstra and ALT-based search effort.
+- Seed changes alter absolute timings, but the top-level ranking remains stable, which is what we want for README reporting.
+- Lower stress does not always mean lower runtime; Python overhead still matters, especially for the more elaborate heuristic variants.
 
 ## Summary of Findings
 

@@ -1,11 +1,11 @@
 {
   "cols": 40,
   "dataset_name": "graph_1000",
-  "edge_count": 3466,
-  "edge_node_ratio": 3.47,
-  "generated_seconds": 0.336,
+  "edge_count": 3420,
+  "edge_node_ratio": 3.42,
+  "generated_seconds": 0.3976,
   "node_count": 1000,
   "rows": 25,
   "scenario": "mixed",
-  "seed": 42
+  "seed": 43
 }

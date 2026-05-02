@@ -1,5 +1,6 @@
 import time
 import sys
+from pathlib import Path
 
 from algorithms.a_star import a_star, time_euclidean_heuristic
 from algorithms.a_star_alt import a_star_alt, a_star_active_alt, a_star_departure_alt
@@ -667,8 +668,10 @@ def _select_network():
 def _generate_and_export_datasets():
     from generator.generate_datasets import generate_and_export_datasets
 
-    print("\nGenerating datasets (100, 1000, 5000 nodes)...")
-    created = generate_and_export_datasets(seed=42, max_nodes=10000)
+    base_dir = Path(__file__).resolve().parents[2] / "data" / "datasets"
+
+    print("\nGenerating datasets (100, 1000, 5000 nodes) into:", base_dir)
+    created = generate_and_export_datasets(base_dir=base_dir, seed=42, max_nodes=10000)
     if not created:
         print("No datasets generated.")
         return
@@ -681,10 +684,12 @@ def _generate_and_export_datasets():
 def _run_dataset_benchmarks():
     from evaluation.benchmark_datasets import run_dataset_benchmarks
 
-    print("\nRunning benchmark suite on stored datasets...")
+    datasets_dir = Path(__file__).resolve().parents[2] / "data" / "datasets"
+
+    print("\nRunning benchmark suite on stored datasets in:", datasets_dir)
     print("Runtime is end-to-end query time; search effort is reported separately as expanded nodes and stress.")
     print("Preprocessing is warmed up before timing, so it is not counted in reported runtime.")
-    rows = run_dataset_benchmarks(runs_per_pair=10)
+    rows = run_dataset_benchmarks(datasets_dir=datasets_dir, runs_per_pair=10)
     print(f"Benchmark complete. Rows written: {len(rows)}")
     print("Files updated:")
     print("- results/runtime_results.csv")
