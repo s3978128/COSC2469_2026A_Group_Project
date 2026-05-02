@@ -64,8 +64,5 @@ env/
 venv/
 ENV/
 
-# Results
-results/
-
 # Ignore data files (optional, comment out if you want to keep data in git)
 # data/
