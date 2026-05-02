@@ -197,9 +197,15 @@ Archived benchmark snapshots:
 - `results/analysis_seed43.txt`: the same suite regenerated with seed `43` for a robustness check
 - `results/analysis_cli.txt`: benchmark of the top-level CLI-generated datasets (data/datasets/)
 
+Snapshot CSVs:
+
+- `results/runtime_results_default.csv`
+- `results/runtime_results_seed43.csv`
+
 Row-level CSV outputs for CLI runs are also saved alongside other results, e.g. `results/runtime_results_cli.csv`.
 
-Benchmark CSV now also includes explainability/search-effort metrics when
+Benchmark CSV now also includes explainability/search-effort metrics and
+one-time preprocessing costs (`preprocess_ms`) when
 available (for example expanded node counts) so runtime numbers can be
 interpreted with search behavior.
 
@@ -305,6 +311,7 @@ All preprocessing is cached on the graph object and excluded from timed query lo
 **Runtime measurement integrity:** All reported runtimes include the full algorithm execution from start to finish. No overhead is subtracted from the final results. This means:
 
 - **Benchmark timing** (`src/evaluation/benchmark.py`): Times the full algorithm call including any per-query setup (e.g., heuristic initialization). Preprocessing (landmarks, contraction, backward Dijkstra) is excluded via warmup hooks, so it does not appear in reported query times.
+- **Preprocessing measurement**: One-time setup is timed separately and stored as `preprocess_ms` in the CSV and as `preprocess:` lines in the analysis text.
 - **Split mode (default)**: Runtime is measured without stats collection to reduce measurement overhead and improve latency accuracy. Stats are collected in a separate call on the same pair.
 - **Compare mode** (menu option for distance/time queries): Times multiple algorithm runs on the same pair; includes full algorithm execution with any per-query overhead (e.g., heuristic cost per node). This is the per-call cost users will see in production.
 - **Combined query** (menu option 3.5): Runs both distance-optimized and time-optimized algorithms independently and reports both path objectives in full detail.
@@ -313,25 +320,25 @@ All preprocessing is cached on the graph object and excluded from timed query lo
 
 ## Cross-Dataset Performance Summary
 
-All benchmarks use 5 query pairs per dataset, 10 runs per pair, departure at 08:00 for time-based queries. Preprocessing (landmark/contraction/backward-Dijkstra) is excluded from timed query loops. The summary below covers every dataset in both the default archive and the seed-43 robustness run.
+All benchmarks use 5 query pairs per dataset, 10 runs per pair, departure at 08:00 for time-based queries. Preprocessing (landmark/contraction/backward-Dijkstra) is excluded from timed query loops and reported separately via `preprocess_ms`. The summary below covers every dataset in both the default archive and the seed-43 robustness run.
 
 ### Best Performers By Dataset
 
 | Dataset | Default best distance | Default best TDSP | Seed43 best distance | Seed43 best TDSP |
 |---|---|---|---|---|
-| `graph_100` | `a_star_alt` - 0.27 ms, stress 0.328 | `bidirectional_time_a_star` - 0.30 ms, stress 0.456 | `a_star_alt` - 0.17 ms, stress 0.242 | `bidirectional_time_a_star` - 0.14 ms, stress 0.434 |
-| `graph_1000` | `bidirectional_dijkstra` - 1.94 ms, stress 0.285 | `bidirectional_time_a_star` - 1.40 ms, stress 0.145 | `a_star_alt` - 0.73 ms, stress 0.086 | `bidirectional_time_a_star` - 0.59 ms, stress 0.115 |
-| `graph_1000_stress` | `a_star_alt` - 1.80 ms, stress 0.071 | `bidirectional_time_a_star` - 1.19 ms, stress 0.153 | `a_star_alt` - 1.06 ms, stress 0.089 | `bidirectional_time_a_star` - 1.35 ms, stress 0.153 |
-| `graph_5000` | `a_star_alt` - 11.80 ms, stress 0.108 | `bidirectional_time_a_star` - 22.57 ms, stress 0.249 | `a_star_alt` - 5.45 ms, stress 0.108 | `bidirectional_time_a_star` - 8.42 ms, stress 0.249 |
+| `graph_100` | `a_star_alt` - 0.19 ms, stress 0.328 | `bidirectional_time_a_star` - 0.17 ms, stress 0.456 | `a_star_alt` - 0.16 ms, stress 0.242 | `bidirectional_time_a_star` - 0.15 ms, stress 0.434 |
+| `graph_1000` | `a_star_alt` - 1.25 ms, stress 0.152 | `bidirectional_time_a_star` - 0.62 ms, stress 0.145 | `a_star_alt` - 0.64 ms, stress 0.086 | `bidirectional_time_a_star` - 0.48 ms, stress 0.115 |
+| `graph_1000_stress` | `a_star_alt` - 1.22 ms, stress 0.071 | `bidirectional_time_a_star` - 0.88 ms, stress 0.153 | `a_star_alt` - 0.99 ms, stress 0.089 | `bidirectional_time_a_star` - 1.12 ms, stress 0.190 |
+| `graph_5000` | `a_star_alt` - 5.41 ms, stress 0.108 | `bidirectional_time_a_star` - 7.59 ms, stress 0.249 | `a_star_alt` - 12.98 ms, stress 0.290 | `bidirectional_time_a_star` - 8.11 ms, stress 0.252 |
 
 ### Distance Results
 
-The distance benchmark is consistently won by `a_star_alt` for `graph_100`, `graph_1000_stress`, and `graph_5000` in both runs. The only exception is the default `graph_1000` dataset, where `bidirectional_dijkstra` edges out `a_star_alt` on runtime while still keeping optimality.
+The distance benchmark is consistently won by `a_star_alt` for every dataset in both runs. The landmark heuristic dominates once preprocessing is amortized, even on mid-sized graphs.
 
 | Dataset | Default winner | Seed43 winner |
 |---|---|---|
 | `graph_100` | `a_star_alt` | `a_star_alt` |
-| `graph_1000` | `bidirectional_dijkstra` | `a_star_alt` |
+| `graph_1000` | `a_star_alt` | `a_star_alt` |
 | `graph_1000_stress` | `a_star_alt` | `a_star_alt` |
 | `graph_5000` | `a_star_alt` | `a_star_alt` |
 
@@ -351,6 +358,7 @@ The distance benchmark is consistently won by `a_star_alt` for `graph_100`, `gra
 - `a_star_alt` is the most reliable distance algorithm overall, especially once the graph gets denser or larger.
 - `bidirectional_time_a_star` is the only TDSP method that stays ahead of Dijkstra at every dataset size we tested.
 - `graph_1000_stress` is a useful stress case because it shows the biggest gap between plain Dijkstra and ALT-based search effort.
+- Preprocessing costs scale with graph size (e.g., ALT ~448 ms and active ALT ~969 ms on `graph_5000` in the default run), so those methods pay off when amortized across repeated queries.
 - Seed changes alter absolute timings, but the top-level ranking remains stable, which is what we want for README reporting.
 - Lower stress does not always mean lower runtime; Python overhead still matters, especially for the more elaborate heuristic variants.
 
@@ -359,7 +367,7 @@ The distance benchmark is consistently won by `a_star_alt` for `graph_100`, `gra
 **Distance problem:**
 - `a_star_alt` is the best overall distance performer across the full default suite and remains the fastest distance method in the seed-43 run as well.
 - It wins because ALT landmarks sharply reduce node expansions, which matters more than per-node overhead once the graphs get larger.
-- `bidirectional_dijkstra` can still be fastest on some mid-sized samples such as graph_1000, where bidirectional search reduces the explored frontier enough to offset its extra bookkeeping.
+- `bidirectional_dijkstra` remains competitive on mid-sized graphs, but it is usually edged out by ALT once preprocessing is amortized.
 
 **Time-dependent shortest path (TDSP) problem:**
 - `bidirectional_time_a_star` is the best overall TDSP performer in both the default and seed-43 benchmark runs.
@@ -377,7 +385,7 @@ The distance benchmark is consistently won by `a_star_alt` for `graph_100`, `gra
 - Synthetic-graph bias: generated grids are useful but simpler than real road networks (topology, turn restrictions, bottlenecks).
 - Sample-size bias: rankings are based on 5 sampled source-goal pairs per dataset; different samples can shift mean runtime.
 - Runtime environment sensitivity: Python constant factors, machine load, and interpreter version affect millisecond-level comparisons.
-- Preprocessing accounting: benchmark excludes one-time setup; deployment scenarios should also report setup cost.
+- Preprocessing accounting: one-time setup is excluded from per-query timing but reported separately as `preprocess_ms`.
 - Scale boundary: datasets up to 5,000 nodes are strong for project evaluation but do not represent production-scale routing graphs.
 
 ## Interesting Discoveries / Breakthroughs
@@ -389,6 +397,21 @@ The distance benchmark is consistently won by `a_star_alt` for `graph_100`, `gra
 3. **The heuristic tax problem for most TDSP heuristics** — Most A*-based TDSP algorithms (`a_star`, `a_star_alt`, `weighted_a_star`) pay more per node in heuristic overhead than they save by expanding fewer nodes, making them slower than Dijkstra at graph_5000. The exception is `bidirectional_time_a_star`, whose backward min-time heuristic is tight enough that it beats Dijkstra on both runtime and expansions.
 
 4. **Inner-loop inlining** — Replacing `cost_by_time(edge, t)` and `cost_by_distance(edge, t)` function calls with direct attribute access (`edge.time_list[int(t//60)%24]`, `edge.distance`) in the relaxation loop eliminates two stack frames per edge relaxation across all algorithms.
+
+## Key Observations & Recommendations
+
+- **Top performers (default archived datasets):** `a_star_alt` is the best distance algorithm across the default suite; `bidirectional_time_a_star` is the best TDSP algorithm. These winners are derived from the archived baseline run in `data/datasets/default/` and summarized in [results/analysis_default.txt](results/analysis_default.txt).
+- **Preprocessing must be reported separately:** one-time costs (landmarks, contraction, backward Dijkstra) are now recorded as `preprocess_ms` in the CSV and as `preprocess:` lines in the analysis text. Always publish both the raw per-query mean and the one-time preprocess_ms.
+- **Amortize expensive preprocessing when making claims about latency:** show an amortized per-query preprocessing cost (preprocess_ms / N_queries) for realistic query volumes. For example, ALT preprocessing on `graph_5000` (~448 ms) becomes ~0.45 ms/query at 1,000 queries.
+- **Report cold-start and warm-start metrics:** include (a) cold-start end-to-end latency that includes preprocessing, (b) warm-start per-query latency excluding preprocessing, and (c) memory footprint of precomputed structures (landmark tables, contracted graphs, etc.).
+- **Provide break-even points:** for each algorithm compare the amortized preprocessing + per-query time against a baseline (e.g., `dijkstra`) and report N_min (number of queries after which the preprocessed method becomes faster). This is the most actionable way to recommend an algorithm for production workloads.
+- **When benchmarking, always include search-effort metrics:** expanded nodes and stress (expanded / |V|) explain when an algorithm's lower expansions don't translate to lower runtime due to Python-level overheads.
+- **Practical deployment guidance:**
+  - Use heavy-preprocessing methods (`a_star_alt`, `a_star_active_alt`, contraction) for server-side cached graphs where thousands of queries are expected.
+  - Use lightweight or no-preprocess methods (`dijkstra`, `a_star` without ALT) for ad-hoc, single-shot queries or low-memory environments.
+  - Include persistence/load-time of precomputed indexes in deployment cost calculations if indexes are saved to disk.
+
+These recommendations reflect the current archived baseline results under `data/datasets/default/` and the updated analysis in `results/analysis_default.txt`.
 
 5. **Departure-aware ALT stays admissible across midnight** — The departure-hour keyed cache uses the global 24-hour minimum for landmark preprocessing so the heuristic remains safe even when paths cross midnight.
 

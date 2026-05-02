@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import statistics
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -241,14 +242,20 @@ def run_dataset_benchmarks(
                 algo_time_kwargs["departure_hour"] = departure_hour
             warmup_fn = algo_meta.get("warmup")
 
+            preprocess_ms = 0.0
+
             # For time-only algorithms, the relevant kwargs are time_kwargs.
             warmup_kwargs = algo_meta.get("time_kwargs", algo_kwargs) if "time" in supported_cost_types and "distance" not in supported_cost_types else algo_kwargs
             if warmup_fn is not None:
+                t0 = time.perf_counter()
                 warmup_fn(graph, warmup_kwargs)
+                preprocess_ms += (time.perf_counter() - t0) * 1000
 
             if algo_name == "bidirectional_time_a_star" and "time" in supported_cost_types:
+                t0 = time.perf_counter()
                 for _, sampled_goal in pairs:
                     precompute_bwd_min_time(graph, sampled_goal)
+                preprocess_ms += (time.perf_counter() - t0) * 1000
 
             batches = []
 
@@ -314,6 +321,7 @@ def run_dataset_benchmarks(
                     row["edge_node_ratio"] = round(ratio, 2)
                     row["scenario"] = metadata.get("scenario", "unknown")
                     row["seed"] = metadata.get("seed", "unknown")
+                    row["preprocess_ms"] = preprocess_ms
 
                     if node_count > 0 and "expanded_nodes_mean" in row:
                         row["stress_mean"] = row["expanded_nodes_mean"] / node_count
@@ -381,6 +389,13 @@ def run_dataset_benchmarks(
                         f"    stress: mean={statistics.mean(stress_means):.4f}, "
                         f"max={max(stress_means):.4f}"
                     )
+                preprocess_vals = [r["preprocess_ms"] for r in arows if "preprocess_ms" in r]
+                if preprocess_vals:
+                    preprocess_mean = statistics.mean(preprocess_vals)
+                    if preprocess_mean > 0:
+                        analysis_lines.append(
+                            f"    preprocess: mean={preprocess_mean:.4f} ms"
+                        )
 
         def _gap_section(cost_type_filter, label_suffix=""):
             """Append optimality gap lines for one cost type."""
